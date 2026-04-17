@@ -239,21 +239,24 @@ CLI subscription APIs — run `uv run strix doctor` if something regresses.
 - `ruff check strixnoapi/` — zero errors.
 - CI matrix green on ubuntu-latest × Python 3.12 + 3.13.
 
-### Known issues
+### Issues handled automatically
 
-- **Windows + local scan**: upstream strix's Docker SDK integration hits a
-  Windows-specific named-pipe bug (`Buffer length can be at most -1
-  characters` in `docker.transport.npipesocket`) when creating the pentest
-  sandbox with large env/mount payloads. This is an upstream runtime issue,
-  not strixnoapi. **Workaround**: run strixnoapi inside WSL2 or a Linux
-  container; or set `DOCKER_HOST=tcp://localhost:2375` if your daemon
-  exposes TCP.
-- **Anthropic OAuth content gate**: Anthropic's subscription-OAuth API only
-  accepts the exact Claude Code system prompt. strixnoapi transparently
-  handles this by folding the caller's system prompt into the first user
-  message (`<strix_system>…</strix_system>` wrapped). If you see
-  `rate_limit_error` with near-zero utilization, it's the content gate,
-  not a quota — the translator already handles it as of commit 77c5135.
+- **Anthropic OAuth content gate** (fixed in `77c5135`): Anthropic's
+  subscription-OAuth API only accepts the exact Claude Code system
+  prompt. strixnoapi's translator locks `system` to that string and
+  folds the caller's real system prompt into the first user message
+  wrapped in `<strix_system>…</strix_system>`.
+- **Windows Docker SDK npipe buffer bug** (fixed in `d5f94b9`): upstream
+  `docker.transport.npipesocket` refused `memoryview` payloads of
+  certain sizes with `ValueError: Buffer length can be at most -1`.
+  strixnoapi ships a runtime monkeypatch (`strixnoapi/runtime/
+  windows_docker_npipe.py`) that coerces any bytes-like input to
+  `bytes` and chunks writes at 64 KiB. Applied automatically on
+  Windows; no-op everywhere else.
+- **Strix warm-up double probe** (fixed in `d3e5ee6`): strix's
+  `warm_up_llm` ran a second connectivity probe that could trip
+  subscription-OAuth burst limits. strixnoapi short-circuits it
+  because the proxy launcher already verifies `/health`.
 
 See `CLAUDE.md` for the full agent operational playbook, `THREAT_MODEL.md` for
 the security analysis, and `MIGRATION.md` for the per-file diff versus upstream.
