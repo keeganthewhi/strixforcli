@@ -1,276 +1,225 @@
-<p align="center">
-  <a href="https://strix.ai/">
-    <img src="https://github.com/usestrix/.github/raw/main/imgs/cover.png" alt="Strix Banner" width="100%">
-  </a>
-</p>
+# strixnoapi
 
-<div align="center">
+**Autonomous AI pentester, powered by your existing AI CLI subscription.**
 
-# Strix
+A hardened fork of [`usestrix/strix`](https://github.com/usestrix/strix) that routes
+LLM calls through **Claude Max/Pro**, **ChatGPT Plus/Pro**, **Gemini Advanced**,
+or **Cursor Pro** using the OAuth token from each CLI's native login — no API keys,
+no token billing, no surprise costs.
 
-### Open-source AI hackers to find and fix your app’s vulnerabilities.
+[![upstream](https://img.shields.io/badge/upstream-usestrix%2Fstrix-blue)](https://github.com/usestrix/strix)
+[![license](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
+[![python](https://img.shields.io/badge/python-3.12%2B-blue)]()
 
-<br/>
+> **Scope & authorization**: Strix is a pentesting tool. Only scan systems you
+> own or have explicit authorization to test. See `SECURITY.md`.
 
-
-<a href="https://docs.strix.ai"><img src="https://img.shields.io/badge/Docs-docs.strix.ai-2b9246?style=for-the-badge&logo=gitbook&logoColor=white" alt="Docs"></a>
-<a href="https://strix.ai"><img src="https://img.shields.io/badge/Website-strix.ai-f0f0f0?style=for-the-badge&logoColor=000000" alt="Website"></a>
-[![](https://dcbadge.limes.pink/api/server/strix-ai)](https://discord.gg/strix-ai)
-
-<a href="https://deepwiki.com/usestrix/strix"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
-<a href="https://github.com/usestrix/strix"><img src="https://img.shields.io/github/stars/usestrix/strix?style=flat-square" alt="GitHub Stars"></a>
-<a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-3b82f6?style=flat-square" alt="License"></a>
-<a href="https://pypi.org/project/strix-agent/"><img src="https://img.shields.io/pypi/v/strix-agent?style=flat-square" alt="PyPI Version"></a>
-
-
-<a href="https://discord.gg/strix-ai"><img src="https://github.com/usestrix/.github/raw/main/imgs/Discord.png" height="40" alt="Join Discord"></a>
-<a href="https://x.com/strix_ai"><img src="https://github.com/usestrix/.github/raw/main/imgs/X.png" height="40" alt="Follow on X"></a>
-
-
-<a href="https://trendshift.io/repositories/15362" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15362" alt="usestrix/strix | Trendshift" width="250" height="55"/></a>
-
-</div>
-
-
-> [!TIP]
-> **New!** Strix integrates seamlessly with GitHub Actions and CI/CD pipelines. Automatically scan for vulnerabilities on every pull request and block insecure code before it reaches production - [Get started with no setup required](https://app.strix.ai).
+The upstream README is preserved at [`README.upstream.md`](./README.upstream.md).
 
 ---
 
+## Why
 
-## Strix Overview
+The upstream Strix agent requires `STRIX_LLM` + `LLM_API_KEY` and bills per
+token through the model provider. If you already pay for Claude Max, ChatGPT
+Plus, Gemini Advanced, or Cursor Pro, that's money you're leaving on the
+table — and for multi-hour pentest runs, the API bill is the dominant cost.
 
-Strix are autonomous AI agents that act just like real hackers - they run your code dynamically, find vulnerabilities, and validate them through actual proof-of-concepts. Built for developers and security teams who need fast, accurate security testing without the overhead of manual pentesting or the false positives of static analysis tools.
+**strixnoapi keeps the upstream scan engine 100% intact** and adds:
 
-**Key Capabilities:**
-
-- **Full hacker toolkit** out of the box
-- **Teams of agents** that collaborate and scale
-- **Real validation** with PoCs, not false positives
-- **Developer‑first** CLI with actionable reports
-- **Auto‑fix & reporting** to accelerate remediation
-
-
-<br>
-
-
-<div align="center">
-  <a href="https://strix.ai">
-    <img src=".github/screenshot.png" alt="Strix Demo" width="1000" style="border-radius: 16px;">
-  </a>
-</div>
-
-
-## Use Cases
-
-- **Application Security Testing** - Detect and validate critical vulnerabilities in your applications
-- **Rapid Penetration Testing** - Get penetration tests done in hours, not weeks, with compliance reports
-- **Bug Bounty Automation** - Automate bug bounty research and generate PoCs for faster reporting
-- **CI/CD Integration** - Run tests in CI/CD to block vulnerabilities before reaching production
-
-## 🚀 Quick Start
-
-**Prerequisites:**
-- Docker (running)
-- An LLM API key from any [supported provider](https://docs.strix.ai/llm-providers/overview) (OpenAI, Anthropic, Google, etc.)
-
-### Installation & First Scan
-
-```bash
-# Install Strix
-curl -sSL https://strix.ai/install | bash
-
-# Configure your AI provider
-export STRIX_LLM="openai/gpt-5.4"
-export LLM_API_KEY="your-api-key"
-
-# Run your first security assessment
-strix --target ./app-directory
-```
-
-> [!NOTE]
-> First run automatically pulls the sandbox Docker image. Results are saved to `strix_runs/<run-name>`
+1. **Subscription-OAuth proxy** — a local FastAPI server that translates
+   LiteLLM-style requests into provider-native API calls authenticated with
+   your CLI's OAuth token. Zero changes to Strix's 300-iteration agent loop,
+   Jinja prompts, or vulnerability taxonomy.
+2. **Security hardening above upstream** — `cap-drop=ALL`, custom seccomp,
+   `--read-only` root, PID/memory caps, hash-chained audit log, curated
+   secret redaction (inbound + outbound), prompt-injection guard, permission
+   gate on config files, CycloneDX SBOM.
+3. **UX + reliability upgrades** — interactive `strix setup`, `strix doctor`
+   diagnostics, `strix resume` from checkpoint, SARIF + HTML report exports,
+   `strix audit verify` tamper-check.
 
 ---
 
-## ☁️ Strix Platform
+## Quickstart
 
-Try the Strix full-stack security platform at **[app.strix.ai](https://app.strix.ai)** — sign up for free, connect your repos and domains, and launch a pentest in minutes.
+### 1. Install
 
-- **Validated findings with PoCs** and reproduction steps
-- **One-click autofix** as ready-to-merge pull requests
-- **Continuous monitoring** across code, cloud, and infrastructure
-- **Integrations** with GitHub, Slack, Jira, Linear, and CI/CD pipelines
-- **Continuous learning** that builds on past findings and remediations
+```bash
+git clone https://github.com/YOUR_USER/strixnoapi.git
+cd strixnoapi
+uv sync
+```
 
-[**Start your first pentest →**](https://app.strix.ai)
+### 2. Authenticate one CLI (once)
+
+Any of these works:
+
+| CLI | Install | Log in |
+|---|---|---|
+| Claude Code | `npm i -g @anthropic-ai/claude-code` | `claude` |
+| OpenAI Codex | `npm i -g @openai/codex` | `codex login` |
+| Google Gemini | `npm i -g @google/gemini-cli` | `gemini` |
+| Cursor | `curl https://cursor.com/install \| bash` | `cursor-agent login` |
+
+### 3. Set up strixnoapi
+
+```bash
+uv run strix setup --auto        # detects + writes ~/.strix/cli-config.json (0o600)
+uv run strix doctor              # preflight checks
+```
+
+### 4. Scan
+
+```bash
+# Local target (OWASP Juice Shop is a good demo)
+docker run -d --name juice -p 3000:3000 bkimminich/juice-shop
+
+# Full scan
+STRIX_CLI_MODE=claude uv run strix \
+  --target http://host.docker.internal:3000 \
+  --non-interactive \
+  --scan-mode standard
+```
+
+### 5. Inspect results
+
+```bash
+ls strix_runs/<run-id>/                         # upstream deliverables
+uv run strix report <run-id> --format sarif     # SARIF 2.1.0 (GitHub-ingestible)
+uv run strix report <run-id> --format html      # standalone HTML report
+uv run strix audit verify <run-id>              # verify the hash-chained audit log
+```
+
+### 6. Resume an interrupted scan
+
+```bash
+uv run strix resume <run-id>    # picks up from the last phase checkpoint
+```
 
 ---
 
-## ✨ Features
+## Architecture
 
-### Agentic Security Tools
+```
+Strix agent loop (UNCHANGED from upstream)
+       │ litellm.acompletion(...)
+       ▼
+http://127.0.0.1:<ephemeral>/v1/chat/completions    (FastAPI, bearer-auth, rate-limited)
+       │ Validates, redacts, scans for injection, audits
+       ▼
+One of: claude_code / codex / gemini / cursor translator
+       │ Loads OAuth token from ~/.<cli>/ on every call (never cached, never persisted)
+       ▼
+api.anthropic.com / chatgpt.com / generativelanguage.googleapis.com / api.cursor.com
+       │ Billed to your subscription
+       ▼
+Response streamed back, outbound redaction, audit append
+```
 
-Strix agents come equipped with a comprehensive security testing toolkit:
-
-- **Full HTTP Proxy** - Full request/response manipulation and analysis
-- **Browser Automation** - Multi-tab browser for testing of XSS, CSRF, auth flows
-- **Terminal Environments** - Interactive shells for command execution and testing
-- **Python Runtime** - Custom exploit development and validation
-- **Reconnaissance** - Automated OSINT and attack surface mapping
-- **Code Analysis** - Static and dynamic analysis capabilities
-- **Knowledge Management** - Structured findings and attack documentation
-
-### Comprehensive Vulnerability Detection
-
-Strix can identify and validate a wide range of security vulnerabilities:
-
-- **Access Control** - IDOR, privilege escalation, auth bypass
-- **Injection Attacks** - SQL, NoSQL, command injection
-- **Server-Side** - SSRF, XXE, deserialization flaws
-- **Client-Side** - XSS, prototype pollution, DOM vulnerabilities
-- **Business Logic** - Race conditions, workflow manipulation
-- **Authentication** - JWT vulnerabilities, session management
-- **Infrastructure** - Misconfigurations, exposed services
-
-### Graph of Agents
-
-Advanced multi-agent orchestration for comprehensive security testing:
-
-- **Distributed Workflows** - Specialized agents for different attacks and assets
-- **Scalable Testing** - Parallel execution for fast comprehensive coverage
-- **Dynamic Coordination** - Agents collaborate and share discoveries
+See `CLAUDE.md` for the full agent operational playbook and `MIGRATION.md`
+for a detailed diff from upstream.
 
 ---
 
-## Usage Examples
+## Security posture
 
-### Basic Usage
+strixnoapi inherits every security property from upstream Strix and adds:
 
-```bash
-# Scan a local codebase
-strix --target ./app-directory
+- **Proxy bound to 127.0.0.1 only.** UUID bearer token required on every request.
+- **Credential files must be 0o600** (Unix). Refuses to start otherwise.
+- **OAuth tokens never persisted** to our config or logs. Read per-request from
+  CLI-native paths.
+- **Hash-chained audit log** — `strix audit verify` detects tampering.
+- **Secret redaction** with 20+ curated patterns (AWS, GitHub, JWT, Anthropic,
+  OpenAI, Stripe, Slack, private keys, etc.) runs on both the prompt and the
+  model's response.
+- **Prompt injection guard** — 8 pattern families, strict mode (`STRIX_INJECTION_STRICT=1`)
+  returns HTTP 400 instead of just logging.
+- **Hardened sandbox image** (`containers/Dockerfile.hardened`) — strips setuid
+  bits, removes su/sudo, layered on top of upstream's Kali-based pentest image.
+- **Custom seccomp profile** (`containers/seccomp.json`) — denies `ptrace`,
+  `keyctl`, `perf_event_open`, `bpf`, kernel module manipulation, `reboot`, etc.
+- **`docker-run-hardened.sh`** — applies `cap-drop=ALL`, `no-new-privileges`,
+  `--read-only`, PID/memory caps, tmpfs scratch mounts.
 
-# Security review of a GitHub repository
-strix --target https://github.com/org/repo
+See `SECURITY.md` for the threat model and disclosure policy, and
+`THREAT_MODEL.md` for the STRIDE analysis.
 
-# Black-box web application assessment
-strix --target https://your-app.com
-```
+---
 
-### Advanced Testing Scenarios
+## Supported CLIs (2026 versions)
 
-```bash
-# Grey-box authenticated testing
-strix --target https://your-app.com --instruction "Perform authenticated testing using credentials: user:pass"
+| CLI | Package | Status | Notes |
+|---|---|---|---|
+| Claude Code | `@anthropic-ai/claude-code` | Stable | OAuth via `anthropic-beta: oauth-2025-04-20` header |
+| OpenAI Codex | `@openai/codex` | Stable | Session-based (chatgpt.com backend-api) |
+| Google Gemini | `@google/gemini-cli` | Stable | Google OAuth + generativelanguage.googleapis.com |
+| Cursor | `cursor-agent` (curl installer) | **Experimental** | api.cursor.com — schema may drift |
 
-# Multi-target testing (source code + deployed app)
-strix -t https://github.com/org/app -t https://your-app.com
+Any CLI you haven't logged into is ignored. `strix setup --auto` picks the
+first authenticated one in order: `claude → codex → cursor → gemini`.
 
-# White-box source-aware scan (local repository)
-strix --target ./app-directory --scan-mode standard
+---
 
-# Focused testing with custom instructions
-strix --target api.your-app.com --instruction "Focus on business logic flaws and IDOR vulnerabilities"
+## Configuration
 
-# Provide detailed instructions through file (e.g., rules of engagement, scope, exclusions)
-strix --target api.your-app.com --instruction-file ./instruction.md
-
-# Force PR diff-scope against a specific base branch
-strix -n --target ./ --scan-mode quick --scope-mode diff --diff-base origin/main
-```
-
-### Headless Mode
-
-Run Strix programmatically without interactive UI using the `-n/--non-interactive` flag—perfect for servers and automated jobs. The CLI prints real-time vulnerability findings, and the final report before exiting. Exits with non-zero code when vulnerabilities are found.
-
-```bash
-strix -n --target https://your-app.com
-```
-
-### CI/CD (GitHub Actions)
-
-Strix can be added to your pipeline to run a security test on pull requests with a lightweight GitHub Actions workflow:
-
-```yaml
-name: strix-penetration-test
-
-on:
-  pull_request:
-
-jobs:
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Install Strix
-        run: curl -sSL https://strix.ai/install | bash
-
-      - name: Run Strix
-        env:
-          STRIX_LLM: ${{ secrets.STRIX_LLM }}
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-
-        run: strix -n -t ./ --scan-mode quick
-```
-
-> [!TIP]
-> In CI pull request runs, Strix automatically scopes quick reviews to changed files.
-> If diff-scope cannot resolve, ensure checkout uses full history (`fetch-depth: 0`) or pass
-> `--diff-base` explicitly.
-
-### Configuration
+Override anything via env (see `.env.example` for the full list):
 
 ```bash
-export STRIX_LLM="openai/gpt-5.4"
-export LLM_API_KEY="your-api-key"
-
-# Optional
-export LLM_API_BASE="your-api-base-url"  # if using a local model, e.g. Ollama, LMStudio
-export PERPLEXITY_API_KEY="your-api-key"  # for search capabilities
-export STRIX_REASONING_EFFORT="high"  # control thinking effort (default: high, quick scan: medium)
+export STRIX_CLI_MODE=claude              # or: codex, cursor, gemini, auto, api
+export STRIX_LOG_PROMPTS=0                # 1 to log redacted prompts (privacy)
+export STRIX_PROXY_RATE_LIMIT=30          # requests/min
+export STRIX_PROXY_INACTIVITY_S=1800      # upstream call timeout
+export STRIX_CLAUDE_MODEL=claude-opus-4-7 # per-CLI model override
+export STRIX_ENFORCE_PERMISSIONS=1        # 0 to skip 0o600 checks (not recommended)
 ```
 
-> [!NOTE]
-> Strix automatically saves your configuration to `~/.strix/cli-config.json`, so you don't have to re-enter it on every run.
+Config file: `~/.strix/cli-config.json` (written by `strix setup`, mode 0o600).
 
-**Recommended models for best results:**
+---
 
-- [OpenAI GPT-5.4](https://openai.com/api/) — `openai/gpt-5.4`
-- [Anthropic Claude Sonnet 4.6](https://claude.com/platform/api) — `anthropic/claude-sonnet-4-6`
-- [Google Gemini 3 Pro Preview](https://cloud.google.com/vertex-ai) — `vertex_ai/gemini-3-pro-preview`
+## API-key fallback
 
-See the [LLM Providers documentation](https://docs.strix.ai/llm-providers/overview) for all supported providers including Vertex AI, Bedrock, Azure, and local models.
+If you want to fall back to API-key billing (or run a model strixnoapi doesn't
+support):
 
-## Enterprise
+```bash
+unset STRIX_CLI_MODE
+export STRIX_LLM=openai/gpt-5.4
+export LLM_API_KEY=sk-...
+uv run strix --target http://...           # falls through to upstream strix
+```
 
-Get the same Strix experience with [enterprise-grade](https://strix.ai/demo) controls: SSO (SAML/OIDC), custom compliance reports, dedicated support & SLA, custom deployment options (VPC/self-hosted), BYOK model support, and tailored agents optimized for your environment. [Learn more](https://strix.ai/demo).
+The `strix-upstream` binary is also available as a direct passthrough.
 
-## Documentation
+---
 
-Full documentation is available at **[docs.strix.ai](https://docs.strix.ai)** — including detailed guides for usage, CI/CD integrations, skills, and advanced configuration.
+## License
+
+Apache 2.0. See `LICENSE`.
+
+Upstream Strix is © 2025 OmniSecure Inc.; see `NOTICE` for attribution.
+
+---
 
 ## Contributing
 
-We welcome contributions of code, docs, and new skills - check out our [Contributing Guide](https://docs.strix.ai/contributing) to get started or open a [pull request](https://github.com/usestrix/strix/pulls)/[issue](https://github.com/usestrix/strix/issues).
+See `CONTRIBUTING.md` (inherited from upstream) and `CLAUDE.md` (agent
+operational playbook).
 
-## Join Our Community
+Before submitting:
+```bash
+uv run ruff check strixnoapi/
+uv run pytest tests/
+uv run strix audit verify <any-recent-run>   # sanity check
+```
 
-Have questions? Found a bug? Want to contribute? **[Join our Discord!](https://discord.gg/strix-ai)**
+---
 
-## Support the Project
+## Project status
 
-**Love Strix?** Give us a ⭐ on GitHub!
-
-## Acknowledgements
-
-Strix builds on the incredible work of open-source projects like [LiteLLM](https://github.com/BerriAI/litellm), [Caido](https://github.com/caido/caido), [Nuclei](https://github.com/projectdiscovery/nuclei), [Playwright](https://github.com/microsoft/playwright), and [Textual](https://github.com/Textualize/textual). Huge thanks to their maintainers!
-
-
-> [!WARNING]
-> Only test apps you own or have permission to test. You are responsible for using Strix ethically and legally.
-
-</div>
+**Preview.** The upstream Strix scan engine is production-grade and ships real
+findings. The subscription-OAuth proxy is the newer layer; Claude / Codex /
+Gemini have been validated, Cursor is experimental. Expect version churn in the
+CLI subscription APIs — run `uv run strix doctor` if something regresses.
