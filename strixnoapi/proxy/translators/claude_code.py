@@ -60,12 +60,14 @@ class ClaudeCodeTranslator(BaseTranslator):
         to kill the whole scan. Absorbing a few retries here is invisible to
         upstream and dramatically reduces flake-out-on-warmup.
 
-        Individual request timeout is capped at 45s regardless of
-        `settings.inactivity_timeout_s` (which covers the whole retry loop) —
-        a single upstream call must not hang for 30 minutes.
+        Individual request timeout is capped at 240 s regardless of
+        `settings.inactivity_timeout_s` — long enough for the memory
+        compressor to chew through a big summarization request under
+        subscription-OAuth backpressure, but bounded so a genuinely hung
+        upstream can't hold the request open forever.
         """
         last_exc: Exception | None = None
-        per_request_timeout = min(45.0, float(settings.inactivity_timeout_s))
+        per_request_timeout = min(240.0, float(settings.inactivity_timeout_s))
         async with httpx.AsyncClient(timeout=per_request_timeout) as client:
             for attempt in range(MAX_RETRY_429 + 1):
                 try:

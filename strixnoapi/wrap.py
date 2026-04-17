@@ -55,6 +55,13 @@ def install_proxy() -> ProxyHandle | None:
     os.environ["OPENAI_API_KEY"] = handle.token
     os.environ["LLM_API_KEY"] = handle.token
     os.environ.setdefault("STRIX_LLM", f"openai/{_default_model(resolved_mode)}")
+    # Subscription-OAuth latency is higher + more variable than direct API
+    # calls (upstream provider often queues OAuth traffic on heavy load).
+    # Lift strix's defaults so the memory-compression path and per-request
+    # LLM timeout can ride through multi-second upstream hiccups without
+    # tripping LiteLLM's retry/giveup logic.
+    os.environ.setdefault("STRIX_MEMORY_COMPRESSOR_TIMEOUT", "300")
+    os.environ.setdefault("LLM_TIMEOUT", "600")
     return handle
 
 
