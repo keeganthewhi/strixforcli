@@ -1,3 +1,78 @@
+# Contributing
+
+> You're looking at `strixnoapi`, a fork of
+> [`usestrix/strix`](https://github.com/usestrix/strix). Contributions to
+> the core scan engine go upstream; contributions to the subscription
+> proxy, hardening layer, setup/doctor/audit subcommands, or report
+> exporters land here.
+
+## Contributing to strixnoapi specifically
+
+### Golden rule
+
+**Never modify `strix/`.** That directory is upstream code, vendored
+verbatim. Changes there break our cherry-pick workflow.
+All strixnoapi additions go under `strixnoapi/`.
+
+### Quickstart
+
+```bash
+git clone https://github.com/keeganthewhi/strixnoapi.git
+cd strixnoapi
+uv sync
+make verify                       # ruff + pytest on strixnoapi/
+uv run strix setup --auto         # authenticate
+uv run strix doctor               # confirm env is healthy
+```
+
+### What to work on
+
+- **proxy/** — translators for new CLIs, auth improvements, rate-limit
+  policies, injection-guard patterns.
+- **interface/** — new subcommands, TUI polish, help text.
+- **security/** — sandbox profile refinements, new secret patterns,
+  SBOM format upgrades.
+- **runtime/** — platform-compat shims for dependencies that misbehave
+  (like the Windows Docker npipe patch).
+- **docs/** — anything that makes the first-run experience faster.
+
+### Syncing with upstream
+
+```bash
+git remote add upstream https://github.com/usestrix/strix.git   # once
+uv run strix update --dry-run                                   # preview
+git merge upstream/main                                         # apply
+uv run pytest                                                   # regression
+```
+
+### PR checklist
+
+- [ ] `uv run ruff check strixnoapi/` → zero errors
+- [ ] `uv run pytest tests/strixnoapi/ --no-cov` → all green
+- [ ] No touches to `strix/`
+- [ ] `CHANGELOG.md` updated under `[Unreleased]`
+- [ ] Conventional Commits format
+- [ ] No `console.log`, no debug `print` in production paths
+- [ ] No secrets, tokens, or identifiers in diffs or tests
+
+### Issue templates
+
+- **Bug**: proxy translator mis-translation, sandbox hardening
+  regression, UX surprise in setup/doctor/audit.
+- **Enhancement**: new CLI support (Codex → future backends), new
+  report formats, seccomp tightening.
+- **Upstream bridge**: strix core behaviour that would ease the
+  subscription-OAuth integration if changed upstream.
+
+---
+
+## Contributing to upstream Strix (historical)
+
+Below is the upstream project's contributor guide — relevant if your
+change belongs in the scan engine itself rather than in strixnoapi.
+
+---
+
 # Contributing to Strix
 
 Thank you for your interest in contributing to Strix! This guide will help you get started with development and contributions.
