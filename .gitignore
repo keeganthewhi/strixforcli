@@ -108,3 +108,4 @@ runs/
 # Temp upstream clone directory (in case of re-import)
 temp-upstream/
 
+.claude-session.md
