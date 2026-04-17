@@ -83,6 +83,10 @@ def cli_main() -> int:
     if len(sys.argv) >= 2 and sys.argv[1] in SUBCOMMANDS:
         return _dispatch_subcommand(sys.argv[1])
 
+    from strixnoapi.runtime import apply_runtime_fixes
+
+    apply_runtime_fixes()
+
     handle = install_proxy()
 
     # Short-circuit upstream warm_up_llm — we've already verified the proxy
