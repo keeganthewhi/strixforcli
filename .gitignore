@@ -97,3 +97,14 @@ Thumbs.db
 schema.graphql
 
 .opencode/
+
+# strixnoapi-specific
+.claude-session.md
+.strix-runtime/
+runs/
+*.token
+*.sarif.tmp
+
+# Temp upstream clone directory (in case of re-import)
+temp-upstream/
+

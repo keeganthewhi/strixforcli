@@ -1,0 +1,45 @@
+# Hardened layer on top of the upstream strix sandbox image.
+#
+# Build the base (containers/Dockerfile) first:
+#     docker build -t strix-sandbox:base -f containers/Dockerfile .
+#
+# Then build this hardened overlay:
+#     docker build -t strixnoapi-sandbox:0.1.0 -f containers/Dockerfile.hardened .
+#
+# Runtime flags (apply these when launching — see strixnoapi/security/sandbox_profile.py):
+#     --read-only
+#     --cap-drop=ALL
+#     --cap-add=NET_RAW --cap-add=NET_ADMIN  (opt-in via STRIX_ALLOW_NET_RAW=1)
+#     --security-opt=no-new-privileges
+#     --security-opt=seccomp=containers/seccomp.json
+#     --pids-limit=512
+#     --memory=4g --memory-swap=4g
+#     --tmpfs=/tmp:rw,size=1g,mode=1777
+#     --tmpfs=/workspace/.cache:rw,size=512m
+
+ARG BASE_IMAGE=strix-sandbox:base
+FROM ${BASE_IMAGE}
+
+USER root
+
+# Mark the sandbox as hardened. Strix tools can key off this at runtime.
+ENV STRIXNOAPI_HARDENED=1 \
+    STRIX_SANDBOX_MODE=true
+
+# Drop most setuid bits — anything that needs raw sockets already has
+# cap_net_raw granted via setcap (see upstream Dockerfile line 49 for nmap).
+RUN find / -xdev -perm -4000 -type f -print0 2>/dev/null | \
+      xargs -0 --no-run-if-empty -I{} sh -c 'chmod u-s "{}" || true'
+
+# Remove shell convenience that's frequently misused during escape attempts
+# (but keep bash/sh — pentest tools depend on them).
+RUN rm -f /usr/bin/su /usr/bin/sudo || true
+# Re-install sudo for pentester if upstream tooling needs it (most don't).
+# This is commented — uncomment only if a tool breaks without sudo.
+# RUN apt-get update && apt-get install -y --no-install-recommends sudo
+
+# Audit log dir owned by pentester, writable.
+RUN mkdir -p /workspace/audit && chown -R pentester:pentester /workspace
+
+USER pentester
+WORKDIR /workspace

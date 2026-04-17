@@ -1,12 +1,12 @@
 [project]
-name = "strix-agent"
-version = "0.8.3"
-description = "Open-source AI Hackers for your apps"
+name = "strixnoapi"
+version = "0.1.0"
+description = "Autonomous AI pentester powered by CLI subscriptions (Claude/Codex/Gemini/Cursor) — a hardened fork of usestrix/strix that uses your subscription quota instead of paid API keys"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"
 authors = [
-  { name = "Strix", email = "hi@usestrix.com" },
+  { name = "strixnoapi contributors" },
 ]
 keywords = [
   "cybersecurity",
@@ -46,10 +46,19 @@ dependencies = [
   "opentelemetry-exporter-otlp-proto-http>=1.40.0",
   "scrubadub>=2.0.1",
   "defusedxml>=0.7.1",
+  # strixnoapi additions: proxy server + upstream HTTP client + report renderers
+  "fastapi>=0.115.0",
+  "uvicorn>=0.30.0",
+  "httpx>=0.27.0",
+  "zstandard>=0.22.0",
+  "tomli-w>=1.0.0",
+  "questionary>=2.0.0",
 ]
 
 [project.scripts]
-strix = "strix.interface.main:main"
+# strixnoapi injects subscription-OAuth proxy setup before upstream main() runs
+strix = "strixnoapi.wrap:cli_main"
+strix-upstream = "strix.interface.main:main"
 
 [project.optional-dependencies]
 vertex = ["google-cloud-aiplatform>=1.38"]
@@ -80,6 +89,10 @@ dev = [
   "black>=25.1.0",
   "isort>=6.0.1",
   "pyinstaller>=6.17.0; python_version >= '3.12' and python_version < '3.15'",
+  # strixnoapi additions
+  "respx>=0.21.0",
+  "pip-audit>=2.7.0",
+  "pytest-httpx>=0.30.0",
 ]
 
 [build-system]
@@ -87,7 +100,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["strix"]
+packages = ["strix", "strixnoapi"]
 
 # ============================================================================
 # Type Checking Configuration
@@ -261,7 +274,7 @@ line-ending = "auto"
 # ============================================================================
 
 [tool.pyright]
-include = ["strix"]
+include = ["strix", "strixnoapi"]
 exclude = ["**/__pycache__", "build", "dist"]
 pythonVersion = "3.12"
 pythonPlatform = "Linux"
@@ -333,6 +346,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--cov=strix",
+    "--cov=strixnoapi",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-report=xml",
@@ -342,9 +356,14 @@ python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
 python_classes = ["Test*"]
 asyncio_mode = "auto"
+markers = [
+    "e2e: end-to-end tests requiring live CLI auth (gated via STRIX_E2E=1)",
+    "integration: integration tests using real ports/subprocesses",
+    "slow: tests that take > 5s",
+]
 
 [tool.coverage.run]
-source = ["strix"]
+source = ["strix", "strixnoapi"]
 omit = [
     "*/tests/*",
     "*/migrations/*",
