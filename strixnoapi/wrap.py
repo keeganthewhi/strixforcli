@@ -31,6 +31,7 @@ SUBCOMMANDS: dict[str, str] = {
     "report": "strixnoapi.interface.report_cmd:main",
     "audit": "strixnoapi.interface.audit_cmd:main",
     "update": "strixnoapi.interface.update_cmd:main",
+    "version": "strixnoapi.interface.version_cmd:main",
 }
 
 
@@ -103,13 +104,23 @@ def cli_main() -> int:
 
 
 def _disable_upstream_warmup() -> None:
-    try:
-        from strix.interface import main as upstream_main_mod
+    """Neuter strix's `warm_up_llm` so it doesn't double-probe the proxy.
 
-        async def _noop_warmup() -> None:
+    Subtle: `strix/interface/__init__.py` does `from .main import main`,
+    which makes `strix.interface.main` resolve to the MAIN FUNCTION when
+    accessed as an attribute. The actual module lives in
+    `sys.modules["strix.interface.main"]`. Patch there.
+    """
+    import sys as _sys
+
+    try:
+        import strix.interface.main  # noqa: F401 — ensure module is loaded
+        upstream_main_mod = _sys.modules["strix.interface.main"]
+
+        async def _noop_warmup() -> None:  # pragma: no cover - runtime-only
             return None
 
-        upstream_main_mod.warm_up_llm = _noop_warmup  # type: ignore[assignment]
+        upstream_main_mod.warm_up_llm = _noop_warmup  # type: ignore[attr-defined]
     except Exception:  # noqa: BLE001
         pass
 

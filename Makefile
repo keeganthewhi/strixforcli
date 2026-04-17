@@ -88,3 +88,34 @@ clean:
 
 dev: format lint type-check test
 	@echo "✅ Development cycle complete!"
+
+# ---------------------------------------------------------------
+# strixnoapi convenience targets
+# ---------------------------------------------------------------
+
+.PHONY: verify test-strixnoapi test-upstream quickstart fresh-clone-test
+
+verify:
+	@echo "🔍 strixnoapi verification (ruff + tests)"
+	uv run ruff check strixnoapi/
+	uv run pytest tests/strixnoapi/ --no-cov
+
+test-strixnoapi:
+	uv run pytest tests/strixnoapi/ --no-cov -v
+
+test-upstream:
+	uv run pytest tests/ --ignore=tests/strixnoapi --ignore=tests/runtime --no-cov
+
+quickstart:
+	@echo "🚀 strixnoapi quickstart"
+	uv sync
+	uv run strix setup --auto
+	uv run strix doctor
+
+fresh-clone-test:
+	@echo "🧪 Simulating fresh-user install in /tmp/strixnoapi-freshtest"
+	rm -rf /tmp/strixnoapi-freshtest
+	git clone https://github.com/keeganthewhi/strixnoapi.git /tmp/strixnoapi-freshtest
+	cd /tmp/strixnoapi-freshtest && uv sync && uv run pytest tests/strixnoapi/ --no-cov -q
+	cd /tmp/strixnoapi-freshtest && uv run strix version
+	cd /tmp/strixnoapi-freshtest && uv run strix doctor || echo "(doctor reports issues; expected on CI without auth'd CLI)"
