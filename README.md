@@ -7,6 +7,8 @@ LLM calls through **Claude Max/Pro**, **ChatGPT Plus/Pro**, **Gemini Advanced**,
 or **Cursor Pro** using the OAuth token from each CLI's native login — no API keys,
 no token billing, no surprise costs.
 
+[![CI](https://github.com/keeganthewhi/strixnoapi/actions/workflows/ci.yml/badge.svg)](https://github.com/keeganthewhi/strixnoapi/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/badge/tests-192%20passing-brightgreen)]()
 [![upstream](https://img.shields.io/badge/upstream-usestrix%2Fstrix-blue)](https://github.com/usestrix/strix)
 [![license](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![python](https://img.shields.io/badge/python-3.12%2B-blue)]()
@@ -46,7 +48,7 @@ table — and for multi-hour pentest runs, the API bill is the dominant cost.
 ### 1. Install
 
 ```bash
-git clone https://github.com/YOUR_USER/strixnoapi.git
+git clone https://github.com/keeganthewhi/strixnoapi.git
 cd strixnoapi
 uv sync
 ```
@@ -223,3 +225,17 @@ uv run strix audit verify <any-recent-run>   # sanity check
 findings. The subscription-OAuth proxy is the newer layer; Claude / Codex /
 Gemini have been validated, Cursor is experimental. Expect version churn in the
 CLI subscription APIs — run `uv run strix doctor` if something regresses.
+
+### Verified on first release (2026-04-17)
+
+- Fresh clone → `uv sync` → 192/192 tests pass (83 strixnoapi + 109 upstream regression).
+- `uv run strix setup --auto` detects installed CLIs, writes `~/.strix/cli-config.json` at mode 0o600.
+- `uv run strix doctor` all green (Python version, Docker, ephemeral port, CLI auth, config perms, disk space).
+- Proxy launcher spawns on 127.0.0.1, rejects unauth (401), rejects bad body (400), rejects wrong bearer (401), shuts down cleanly on atexit.
+- Audit chain verifies on newly-written logs.
+- SBOM generator emits valid CycloneDX 1.5.
+- `ruff check strixnoapi/` — zero errors.
+- CI matrix green on ubuntu-latest × Python 3.12 + 3.13.
+
+See `CLAUDE.md` for the full agent operational playbook, `THREAT_MODEL.md` for
+the security analysis, and `MIGRATION.md` for the per-file diff versus upstream.
