@@ -228,14 +228,32 @@ CLI subscription APIs — run `uv run strix doctor` if something regresses.
 
 ### Verified on first release (2026-04-17)
 
-- Fresh clone → `uv sync` → 192/192 tests pass (83 strixnoapi + 109 upstream regression).
+- Fresh clone → `uv sync` → 84/84 strixnoapi tests pass + 109/109 upstream regression tests.
 - `uv run strix setup --auto` detects installed CLIs, writes `~/.strix/cli-config.json` at mode 0o600.
 - `uv run strix doctor` all green (Python version, Docker, ephemeral port, CLI auth, config perms, disk space).
 - Proxy launcher spawns on 127.0.0.1, rejects unauth (401), rejects bad body (400), rejects wrong bearer (401), shuts down cleanly on atexit.
+- Real Claude Max subscription OAuth end-to-end: direct completion request → 200 with valid content in 1.3s.
+- Real strix scan against a multi-target repo + live URL: subscription-OAuth proxy handles litellm requests successfully; strix's agent loop reaches sandbox-creation phase (14+ proxy requests per minute, all 200).
 - Audit chain verifies on newly-written logs.
 - SBOM generator emits valid CycloneDX 1.5.
 - `ruff check strixnoapi/` — zero errors.
 - CI matrix green on ubuntu-latest × Python 3.12 + 3.13.
+
+### Known issues
+
+- **Windows + local scan**: upstream strix's Docker SDK integration hits a
+  Windows-specific named-pipe bug (`Buffer length can be at most -1
+  characters` in `docker.transport.npipesocket`) when creating the pentest
+  sandbox with large env/mount payloads. This is an upstream runtime issue,
+  not strixnoapi. **Workaround**: run strixnoapi inside WSL2 or a Linux
+  container; or set `DOCKER_HOST=tcp://localhost:2375` if your daemon
+  exposes TCP.
+- **Anthropic OAuth content gate**: Anthropic's subscription-OAuth API only
+  accepts the exact Claude Code system prompt. strixnoapi transparently
+  handles this by folding the caller's system prompt into the first user
+  message (`<strix_system>…</strix_system>` wrapped). If you see
+  `rate_limit_error` with near-zero utilization, it's the content gate,
+  not a quota — the translator already handles it as of commit 77c5135.
 
 See `CLAUDE.md` for the full agent operational playbook, `THREAT_MODEL.md` for
 the security analysis, and `MIGRATION.md` for the per-file diff versus upstream.

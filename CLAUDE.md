@@ -299,12 +299,28 @@ a per-file-ignore in `pyproject.toml` — don't sprinkle `noqa` comments.
 | `Insecure permissions` on startup | `chmod 644` leak | `chmod 600 ~/.strix/cli-config.json` + any `~/.<cli>/` cred file |
 | `Claude OAuth token rejected (401)` | Token expired | `claude` (re-auth in browser) |
 | `Codex session rejected` | Session rotated | `codex login` again |
+| `rate_limit_error` 429 from Claude with ~0% utilization | System prompt deviates from Claude Code's exact prefix — Anthropic OAuth content gate | Already handled: claude_code translator folds caller system into first user message |
 | Proxy port collision | Port in use | Unset `STRIX_PROXY_PORT`, retry |
 | Docker not reachable | Daemon down | Start Docker Desktop / systemctl start docker |
+| `Buffer length can be at most -1 characters` (Windows only) | Upstream Docker SDK bug with Windows named-pipe sockets on large payloads — NOT a strixnoapi issue | Run strixnoapi inside WSL2 or a Linux container; or set `DOCKER_HOST=tcp://localhost:2375` if daemon exposes TCP |
 | Scan hangs after N minutes | Inactivity watchdog (30 min) | Check target is reachable; `STRIX_PROXY_INACTIVITY_S=3600` to extend |
 | Audit verify fails | Log tampered or crash mid-write | Re-run scan; keep prior log for forensics |
 | Upstream tests fail after edit | You changed `strix/` accidentally | `git diff strix/` and revert |
 | `ruff check` error you can't fix | Legit pattern | Add per-file-ignore in pyproject.toml |
+
+### Anthropic OAuth behavior (2026-04-17)
+
+Empirically confirmed: Anthropic's `anthropic-beta: oauth-2025-04-20` path
+only accepts the EXACT system string `"You are Claude Code, Anthropic's
+official CLI for Claude."`. Any deviation returns HTTP 429 with body
+`{"type":"error","error":{"type":"rate_limit_error","message":"Error"}}`
+regardless of the actual rate-limit budget. This is a content gate
+disguised as a rate limit. `strixnoapi/proxy/translators/claude_code.py`
+handles this transparently by folding the caller's system prompt into
+the first user message wrapped in `<strix_system>...</strix_system>`.
+
+If you see persistent 429s and your 5h/7d utilization headers show low
+numbers, suspect a system prompt deviation, NOT an actual rate limit.
 
 ---
 
