@@ -39,7 +39,7 @@ def apply() -> bool:
     Returns True if the patch was applied this invocation, False if it
     was a no-op (non-Windows, module missing, or already patched).
     """
-    global _APPLIED  # noqa: PLW0603
+    global _APPLIED
     if _APPLIED:
         return False
     if sys.platform != "win32":
@@ -68,12 +68,11 @@ def apply() -> bool:
 def _make_patched_send(original_send: Any) -> Any:
     """Wrap NpipeSocket.send to accept any bytes-like object and chunk it."""
 
-    from docker.transport import npipesocket  # type: ignore[import-not-found]
-
     import pywintypes  # type: ignore[import-not-found]
     import win32api  # type: ignore[import-not-found]
     import win32event  # type: ignore[import-not-found]
     import win32file  # type: ignore[import-not-found]
+    from docker.transport import npipesocket  # type: ignore[import-not-found]
 
     def _write_chunk(sock: Any, chunk: bytes) -> int:
         """Single WriteFile for one bounded chunk; returns bytes written."""
@@ -122,7 +121,6 @@ def _make_patched_sendall() -> Any:
             if not n:
                 raise OSError("NpipeSocket.sendall: underlying send returned 0")
             sent += n
-        return None
 
     return patched_sendall
 

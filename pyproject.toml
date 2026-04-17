@@ -335,6 +335,12 @@ ignore = [
 "strixnoapi/proxy/ratelimit.py" = [
     "PLW0603", # module-level bucket is intentional
 ]
+"strixnoapi/runtime/windows_docker_npipe.py" = [
+    "FBT003",  # win32event API requires positional booleans (manual event)
+    "PLC0415", # platform-gated imports are intentional
+    "PLW0603", # module-level _APPLIED sentinel for idempotence
+    "F841",    # keep original_sendall reference for documentation + test hooks
+]
 "strixnoapi/proxy/audit.py" = [
     "TRY300",
 ]
