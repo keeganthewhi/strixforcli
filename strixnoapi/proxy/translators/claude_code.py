@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -18,10 +20,14 @@ if TYPE_CHECKING:
     from strixnoapi.proxy.settings import ProxySettings
 
 
+log = logging.getLogger(__name__)
+
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 OAUTH_BETA = "oauth-2025-04-20"
 CLAUDE_CODE_SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude."
+MAX_RETRY_429 = 2  # Anthropic throttles spam; retry sparingly
+RETRY_BACKOFF_BASE_S = 8.0
 
 
 class ClaudeCodeTranslator(BaseTranslator):
@@ -33,8 +39,7 @@ class ClaudeCodeTranslator(BaseTranslator):
     ) -> dict[str, Any]:
         anthropic_body = self._to_anthropic(body)
         headers = self._headers(oauth, stream=False)
-        async with httpx.AsyncClient(timeout=settings.inactivity_timeout_s) as client:
-            resp = await client.post(ANTHROPIC_URL, json=anthropic_body, headers=headers)
+        resp = await self._post_with_retry(anthropic_body, headers, settings)
         self._raise_for_status(resp)
         data = resp.json()
         text = self._extract_text(data)
@@ -45,6 +50,53 @@ class ClaudeCodeTranslator(BaseTranslator):
             finish_reason=self._map_stop_reason(data.get("stop_reason")),
             usage=usage,
         )
+
+    async def _post_with_retry(
+        self, body: dict[str, Any], headers: dict[str, str], settings: ProxySettings
+    ) -> httpx.Response:
+        """POST with silent retry on Anthropic 429/5xx (transient rate limits + server blips).
+
+        Strix's warm_up_llm has no retry logic, so transient rate limits used
+        to kill the whole scan. Absorbing a few retries here is invisible to
+        upstream and dramatically reduces flake-out-on-warmup.
+
+        Individual request timeout is capped at 45s regardless of
+        `settings.inactivity_timeout_s` (which covers the whole retry loop) —
+        a single upstream call must not hang for 30 minutes.
+        """
+        last_exc: Exception | None = None
+        per_request_timeout = min(45.0, float(settings.inactivity_timeout_s))
+        async with httpx.AsyncClient(timeout=per_request_timeout) as client:
+            for attempt in range(MAX_RETRY_429 + 1):
+                try:
+                    resp = await client.post(ANTHROPIC_URL, json=body, headers=headers)
+                except httpx.RequestError as e:
+                    last_exc = e
+                    log.warning("anthropic request error on attempt %d: %s", attempt + 1, e)
+                    if attempt >= MAX_RETRY_429:
+                        raise
+                    await asyncio.sleep(RETRY_BACKOFF_BASE_S * (2**attempt))
+                    continue
+                if resp.status_code in (429, 500, 502, 503, 504):
+                    if attempt >= MAX_RETRY_429:
+                        return resp
+                    retry_after = resp.headers.get("retry-after")
+                    wait_s = (
+                        float(retry_after)
+                        if retry_after and retry_after.isdigit()
+                        else RETRY_BACKOFF_BASE_S * (2**attempt)
+                    )
+                    log.info(
+                        "anthropic %s on attempt %d, retrying in %.1fs",
+                        resp.status_code, attempt + 1, wait_s,
+                    )
+                    await asyncio.sleep(min(wait_s, 30.0))
+                    continue
+                return resp
+        if last_exc:
+            raise last_exc
+        msg = "retry loop exited without response"
+        raise RuntimeError(msg)
 
     async def stream_openai(
         self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
@@ -125,15 +177,30 @@ class ClaudeCodeTranslator(BaseTranslator):
         return h
 
     def _to_anthropic(self, body: dict[str, Any]) -> dict[str, Any]:
-        system, msgs = self.extract_system_and_messages(body)
-        system = f"{CLAUDE_CODE_SYSTEM_PREFIX}\n\n{system}" if system else CLAUDE_CODE_SYSTEM_PREFIX
+        """Translate OpenAI chat body to Anthropic Messages body.
+
+        CRITICAL: the `anthropic-beta: oauth-2025-04-20` subscription path
+        ONLY accepts the exact Claude Code system prompt; any appended or
+        replaced text causes Anthropic to return a 429 "rate_limit_error".
+        (Verified empirically 2026-04-17.)
+
+        Workaround: lock `system` to the Claude Code prefix and fold the
+        caller's real system content into the FIRST user message, wrapped
+        with `<strix_system>...</strix_system>` so Claude still distinguishes
+        task instructions from user content.
+        """
+        caller_system, msgs = self.extract_system_and_messages(body)
+        coerced_msgs = [self._coerce_message(m) for m in msgs]
+        if caller_system:
+            self._prepend_to_first_user(coerced_msgs, caller_system)
+
         model = body.get("model") or "claude-sonnet-4-6"
         if model.startswith("openai/"):
             model = model.removeprefix("openai/")
         anthropic: dict[str, Any] = {
             "model": model,
-            "messages": [self._coerce_message(m) for m in msgs],
-            "system": system,
+            "messages": coerced_msgs,
+            "system": CLAUDE_CODE_SYSTEM_PREFIX,
             "max_tokens": int(body.get("max_tokens") or 8192),
         }
         if "temperature" in body:
@@ -141,11 +208,34 @@ class ClaudeCodeTranslator(BaseTranslator):
         if "top_p" in body:
             anthropic["top_p"] = float(body["top_p"])
         if "stop" in body and body["stop"] is not None:
-            anthropic["stop_sequences"] = body["stop"] if isinstance(body["stop"], list) else [body["stop"]]
+            anthropic["stop_sequences"] = (
+                body["stop"] if isinstance(body["stop"], list) else [body["stop"]]
+            )
         tools = body.get("tools")
         if tools:
             anthropic["tools"] = self._translate_tools(tools)
         return anthropic
+
+    @staticmethod
+    def _prepend_to_first_user(
+        coerced_msgs: list[dict[str, Any]], system_text: str
+    ) -> None:
+        """Mutates coerced_msgs: wraps system_text as <strix_system>...</strix_system>
+        and prepends it to the first user message (creating one if none exist)."""
+        wrapped = f"<strix_system>\n{system_text}\n</strix_system>\n\n"
+        for m in coerced_msgs:
+            if m.get("role") == "user":
+                content = m.get("content")
+                if isinstance(content, str):
+                    m["content"] = wrapped + content
+                elif isinstance(content, list):
+                    text_items = [b for b in content if isinstance(b, dict) and b.get("type") == "text"]
+                    if text_items:
+                        text_items[0]["text"] = wrapped + text_items[0].get("text", "")
+                    else:
+                        content.insert(0, {"type": "text", "text": wrapped})
+                return
+        coerced_msgs.insert(0, {"role": "user", "content": wrapped})
 
     @staticmethod
     def _coerce_message(m: dict[str, Any]) -> dict[str, Any]:

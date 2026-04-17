@@ -80,8 +80,13 @@ async def test_claude_complete_with_system(settings, claude_oauth):
     }
     await t.complete_openai(body, claude_oauth, settings)
     sent = json.loads(route.calls[0].request.content)
-    assert "be helpful" in sent["system"]
-    assert sent["system"].startswith("You are Claude Code")
+    # Anthropic OAuth only accepts the exact Claude Code system string;
+    # caller's system content is wrapped into the user message instead.
+    assert sent["system"] == "You are Claude Code, Anthropic's official CLI for Claude."
+    first_user = next(m for m in sent["messages"] if m["role"] == "user")
+    assert "<strix_system>" in first_user["content"]
+    assert "be helpful" in first_user["content"]
+    assert "hi" in first_user["content"]
 
 
 @pytest.mark.asyncio

@@ -83,12 +83,31 @@ def cli_main() -> int:
     if len(sys.argv) >= 2 and sys.argv[1] in SUBCOMMANDS:
         return _dispatch_subcommand(sys.argv[1])
 
-    install_proxy()
+    handle = install_proxy()
+
+    # Short-circuit upstream warm_up_llm — we've already verified the proxy
+    # is up via /health in launcher._wait_healthy(). Warming up a second time
+    # through LiteLLM can trip Anthropic's short-term rate limit and kills
+    # the scan before it starts.
+    if handle is not None:
+        _disable_upstream_warmup()
 
     from strix.interface.main import main as upstream_main
 
     upstream_main()
     return 0
+
+
+def _disable_upstream_warmup() -> None:
+    try:
+        from strix.interface import main as upstream_main_mod
+
+        async def _noop_warmup() -> None:
+            return None
+
+        upstream_main_mod.warm_up_llm = _noop_warmup  # type: ignore[assignment]
+    except Exception:  # noqa: BLE001
+        pass
 
 
 if __name__ == "__main__":
