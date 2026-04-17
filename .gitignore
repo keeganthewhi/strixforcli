@@ -104,8 +104,8 @@ schema.graphql
 runs/
 *.token
 *.sarif.tmp
+examples/demo.sqlite
+examples/*.sqlite-journal
 
 # Temp upstream clone directory (in case of re-import)
 temp-upstream/
-
-.claude-session.md
