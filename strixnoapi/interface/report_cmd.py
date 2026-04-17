@@ -55,32 +55,111 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _load_findings(run_dir: Path) -> list[dict]:
+    """Load findings from a strix run directory.
+
+    Strix (upstream) emits `vulnerabilities/vuln-NNNN.md` plus a flat
+    `vulnerabilities.csv` index. strixnoapi parses the CSV for an
+    authoritative list (severity, id, title, timestamp, file) and then
+    pulls richer fields (CWE, CVSS, endpoint, description) from the
+    corresponding markdown. Falls back to finer-grained JSON formats if
+    present for forward compatibility.
+    """
+    import json as _json
+
+    findings: list[dict] = []
+    csv_path = run_dir / "vulnerabilities.csv"
+    if csv_path.exists():
+        import csv
+
+        with csv_path.open("r", encoding="utf-8", newline="") as fh:
+            for row in csv.DictReader(fh):
+                md_rel = row.get("file", "")
+                md_path = run_dir / md_rel if md_rel else None
+                parsed = _parse_vuln_markdown(md_path) if md_path and md_path.exists() else {}
+                findings.append(
+                    {
+                        "id": row.get("id") or parsed.get("id") or "",
+                        "title": row.get("title") or parsed.get("title") or "",
+                        "severity": (row.get("severity") or parsed.get("severity") or "info").lower(),
+                        "timestamp": row.get("timestamp") or parsed.get("timestamp") or "",
+                        "file": parsed.get("target", ""),
+                        "line": parsed.get("line"),
+                        "description": parsed.get("description", ""),
+                        "evidence": parsed.get("evidence", ""),
+                        "cwe": parsed.get("cwe"),
+                        "cvss": parsed.get("cvss"),
+                        "endpoint": parsed.get("endpoint"),
+                        "method": parsed.get("method"),
+                    }
+                )
+        if findings:
+            return findings
+
+    # Back-compat: findings.json / vulnerabilities/*.json
     findings_file = run_dir / "findings.json"
     if findings_file.exists():
-        import json
-
         try:
-            data = json.loads(findings_file.read_text(encoding="utf-8"))
+            data = _json.loads(findings_file.read_text(encoding="utf-8"))
             if isinstance(data, list):
                 return data
             if isinstance(data, dict) and isinstance(data.get("findings"), list):
                 return data["findings"]
-        except json.JSONDecodeError:
+        except _json.JSONDecodeError:
             pass
-    # Fallback: scan for any *.json in vulnerabilities/
     vulns_dir = run_dir / "vulnerabilities"
-    findings: list[dict] = []
     if vulns_dir.exists():
         for f in vulns_dir.glob("*.json"):
             try:
-                findings.append(__import__("json").loads(f.read_text(encoding="utf-8")))
+                findings.append(_json.loads(f.read_text(encoding="utf-8")))
             except Exception:  # noqa: BLE001
                 pass
     return findings
 
 
+def _parse_vuln_markdown(md_path: Path) -> dict:
+    """Extract structured fields from a strix vuln-NNNN.md file."""
+    import re
+
+    try:
+        text = md_path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+
+    out: dict = {}
+    title_m = re.match(r"^# +(.+?)\s*\n", text)
+    if title_m:
+        out["title"] = title_m.group(1).strip()
+
+    # Key-value lines of the form "**Key:** value"
+    for key in ("ID", "Severity", "Found", "Target", "Endpoint", "Method", "CWE", "CVSS"):
+        m = re.search(rf"^\*\*{key}:\*\*\s*(.+)$", text, flags=re.MULTILINE)
+        if m:
+            norm = key.lower().replace("found", "timestamp")
+            out[norm] = m.group(1).strip()
+
+    # Extract `## Description` through next heading
+    desc_m = re.search(r"^## Description\s*\n(.+?)(?=\n## |\Z)", text, flags=re.DOTALL | re.MULTILINE)
+    if desc_m:
+        out["description"] = desc_m.group(1).strip()
+
+    # Best-effort line hint like ":15" or "line 25" inside the doc
+    line_m = re.search(r"\b(?:line|L)\s*(\d+)\b", text, flags=re.IGNORECASE)
+    if line_m:
+        try:
+            out["line"] = int(line_m.group(1))
+        except ValueError:
+            pass
+
+    return out
+
+
 def _load_markdown(run_dir: Path) -> str:
-    for name in ("report.md", "REPORT.md", "deliverables/report.md"):
+    for name in (
+        "penetration_test_report.md",
+        "report.md",
+        "REPORT.md",
+        "deliverables/report.md",
+    ):
         f = run_dir / name
         if f.exists():
             return f.read_text(encoding="utf-8")
