@@ -120,6 +120,35 @@ py3.13) green on every commit from `77c5135` onward.
 Re-run this verification on any target at any time:
 
 ```bash
-make verify            # ruff + tests (< 10s)
-make fresh-clone-test  # full fresh-user sim from github.com
+make verify              # ruff + tests (< 10s)
+make fresh-clone-test    # full fresh-user sim from github.com
+scripts/verify_install.sh  # 12-step install sanity check
 ```
+
+## End-to-end scan with planted findings (2026-04-17)
+
+`examples/vuln_app.py` ships three textbook bugs (SQLi, RCE, open
+redirect). A `scan-mode quick` run against that target, routed through
+Claude Max OAuth, produced:
+
+- **OS Command Injection (RCE)** via `/ping?host=…`, `shell=True`
+  — reported with full taint analysis (source/sink/guard)
+- **SQL Injection** in `/login` — reported as authentication bypass
+  + data-exfiltration vector
+- **Unvalidated Open Redirect** in `/go` — phishing / OAuth-code-theft
+  / trust-chain scenarios documented, source-and-sink traced, cross-
+  referenced with Semgrep rule `python.flask.security.open-redirect`
+
+Scan metrics during that run:
+
+- Container: `strix-scan-vuln-test_<id>` (Kali sandbox, hardened flags)
+- Proxy LLM turns: ~100 request/response pairs
+- Events: 237+ in `strix_runs/<id>/events.jsonl`
+- Multi-agent: root agent spawned sub-agents for parallel recon
+- Tools exercised: `str_replace_editor`, `terminal_execute`,
+  `python_action`, `think`, `list_files`, `search_files`,
+  `create_vulnerability_report`, `finding.reviewed`
+- Findings reviewed by strix's reviewer agent and promoted to the run
+  deliverables
+
+All findings are available in `strix_runs/<id>/`.
