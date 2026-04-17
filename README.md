@@ -69,29 +69,6 @@ Authenticate whichever CLI you'll route through — once:
 
 ---
 
-## Verified on a real target
-
-Running against `examples/vuln_app.py` (three planted textbook bugs) via
-Claude Max OAuth finished in ~5 minutes with:
-
-```
-Vulnerabilities  CRITICAL: 2 | MEDIUM: 1 (Total: 3)
-Agents  4    Tools  53    Input 2.3M    Output 19.3K    Cost $0
-Output  strix_runs/vuln-test_f42c
-```
-
-All three findings surfaced with full technical detail (CWE, CVSS,
-source / sink / guard trace, attack scenarios, remediation):
-
-- `CRITICAL` **OS Command Injection (RCE)** in `/ping` (`shell=True`)
-- `CRITICAL` **SQL Injection** in `/login` (auth bypass + data exfil)
-- `MEDIUM` **Unvalidated Open Redirect** in `/go`
-
-See `VERIFIED.md` for the full run log and `examples/README.md` to
-reproduce.
-
----
-
 ## Architecture
 
 ```
