@@ -312,18 +312,95 @@ class ClaudeCodeTranslator(BaseTranslator):
             return "tool_calls"
         return "stop"
 
-    def _translate_stream_event(
+    def _translate_stream_event(  # noqa: PLR0911 — dispatch over event types
         self, event: dict[str, Any], model: str, chat_id: str
     ) -> str | None:
+        """Map one Anthropic SSE event → one OpenAI chat-completion chunk.
+
+        Anthropic streams a stable sequence:
+
+          message_start -> (content_block_start -> content_block_delta* ->
+          content_block_stop)+ -> message_delta -> message_stop
+
+        LiteLLM / the OpenAI SDK expect a role delta on the first chunk,
+        text deltas for the body, and a final chunk with finish_reason.
+        Missing any of these → LiteLLM's stream-chunk-builder can fail
+        to assemble a response and will time out the whole request.
+
+        Previously we only emitted text_delta and dropped everything
+        else, which was fine for short responses but could leave long
+        tool-heavy turns with huge gaps between chunks → LiteLLM
+        timeout.
+        """
         t = event.get("type")
-        if t == "content_block_delta":
-            delta = event.get("delta", {})
-            if delta.get("type") == "text_delta":
+        if t == "message_start":
+            # First chunk — carries role so OpenAI SDK knows a message is starting.
+            return self.make_openai_chunk(
+                {"role": "assistant", "content": ""},
+                model=model,
+                chat_id=chat_id,
+            )
+        if t == "content_block_start":
+            block = event.get("content_block") or {}
+            if block.get("type") == "text":
+                # Emit an empty delta to keep the stream lively.
+                return self.make_openai_chunk({}, model=model, chat_id=chat_id)
+            if block.get("type") == "tool_use":
+                # Surface tool_use start as inline XML that strix's parser
+                # can recognize even without native tool-calling.
+                name = block.get("name", "")
                 return self.make_openai_chunk(
-                    {"role": "assistant", "content": delta.get("text", "")},
+                    {"content": f'\n<invoke name="{name}">'},
                     model=model,
                     chat_id=chat_id,
                 )
+            return None
+        if t == "content_block_delta":
+            delta = event.get("delta", {})
+            dt = delta.get("type")
+            if dt == "text_delta":
+                return self.make_openai_chunk(
+                    {"content": delta.get("text", "")},
+                    model=model,
+                    chat_id=chat_id,
+                )
+            if dt == "input_json_delta":
+                partial = delta.get("partial_json", "")
+                return self.make_openai_chunk(
+                    {"content": partial},
+                    model=model,
+                    chat_id=chat_id,
+                )
+            if dt == "thinking_delta":
+                # Surface extended-thinking content as regular text so the
+                # scan log stays coherent; strix's parser ignores whitespace.
+                return self.make_openai_chunk(
+                    {"content": delta.get("thinking", "")},
+                    model=model,
+                    chat_id=chat_id,
+                )
+            return None
+        if t == "content_block_stop":
+            # Close any open tool_use XML so strix's XML parser terminates cleanly.
+            return self.make_openai_chunk(
+                {"content": "</invoke>\n"},
+                model=model,
+                chat_id=chat_id,
+            )
+        if t == "message_delta":
+            # Anthropic signals stop_reason here; we emit nothing — the
+            # outer stream loop emits the final finish_reason chunk.
+            return None
+        if t == "message_stop":
+            return None
+        if t == "error":
+            err = event.get("error", {})
+            return self.make_openai_chunk(
+                {"content": f"\n[upstream error: {err.get('message', 'unknown')}]"},
+                model=model,
+                chat_id=chat_id,
+            )
+        # "ping" and any unknown events — ignore but don't starve the stream.
         return None
 
     @staticmethod
