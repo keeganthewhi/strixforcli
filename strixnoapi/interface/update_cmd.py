@@ -5,10 +5,14 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-from typing import Sequence
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.panel import Panel
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 UPSTREAM_REMOTE = "upstream"

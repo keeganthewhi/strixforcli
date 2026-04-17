@@ -17,16 +17,20 @@ BINARY: dict[str, list[str]] = {
     "cursor": ["cursor-agent", "cursor"],
 }
 
-CRED_PATHS: dict[str, list[Path]] = {
-    "claude": [Path.home() / ".claude" / ".credentials.json"],
-    "codex": [Path.home() / ".codex" / "auth.json"],
-    "gemini": [Path.home() / ".gemini" / "oauth_creds.json"],
-    "cursor": [
-        Path.home() / ".cursor" / "cli-config.json",
-        Path.home() / ".cursor" / "auth.json",
-        Path.home() / ".cursor" / "session.json",
-    ],
-}
+
+def cred_paths(cli: str) -> list[Path]:
+    """Per-CLI credential file paths — computed lazily so tests can monkeypatch HOME."""
+    home = Path.home()
+    return {
+        "claude": [home / ".claude" / ".credentials.json"],
+        "codex": [home / ".codex" / "auth.json"],
+        "gemini": [home / ".gemini" / "oauth_creds.json"],
+        "cursor": [
+            home / ".cursor" / "cli-config.json",
+            home / ".cursor" / "auth.json",
+            home / ".cursor" / "session.json",
+        ],
+    }.get(cli, [])
 
 
 @dataclass(frozen=True)
@@ -48,7 +52,7 @@ def detect_cli(name: str) -> CliDetection:
             binary_path = which
             break
     cred_path = None
-    for candidate in CRED_PATHS.get(name, []):
+    for candidate in cred_paths(name):
         if candidate.exists():
             cred_path = candidate
             break

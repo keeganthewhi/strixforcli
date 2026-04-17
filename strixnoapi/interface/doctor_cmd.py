@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import argparse
-import os
 import shutil
 import socket
 import sys
 from pathlib import Path
-from typing import Sequence
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.panel import Panel
@@ -16,6 +15,10 @@ from rich.table import Table
 
 from strixnoapi.interface.detector import detect_all
 from strixnoapi.security.permission_gate import check_permissions
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -73,7 +76,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _check_python() -> tuple[str, bool, str]:
     py = sys.version_info
     ok = py >= (3, 12)
-    return ("Python ≥ 3.12", ok, f"{py.major}.{py.minor}.{py.micro}")
+    return ("Python 3.12+", ok, f"{py.major}.{py.minor}.{py.micro}")
 
 
 def _check_docker() -> tuple[str, bool, str]:
@@ -115,7 +118,7 @@ def _check_clis() -> tuple[str, bool, str]:
 def _check_config_permissions() -> tuple[str, bool, str]:
     config_path = Path.home() / ".strix" / "cli-config.json"
     if not config_path.exists():
-        return ("Config file (~/.strix/cli-config.json)", False, "not found — run `strix setup`")
+        return ("Config file (~/.strix/cli-config.json)", False, "not found - run `strix setup`")
     ok, reason = check_permissions(config_path)
     return ("Config file permissions 0o600", ok, reason)
 
@@ -125,9 +128,9 @@ def _check_disk_space() -> tuple[str, bool, str]:
         stat = shutil.disk_usage(Path.home())
         free_gb = stat.free / (1024**3)
         ok = free_gb >= 2.0
-        return ("≥ 2 GB free disk", ok, f"{free_gb:.1f} GB free")
+        return ("2+ GB free disk", ok, f"{free_gb:.1f} GB free")
     except OSError as e:
-        return ("≥ 2 GB free disk", False, str(e))
+        return ("2+ GB free disk", False, str(e))
 
 
 if __name__ == "__main__":

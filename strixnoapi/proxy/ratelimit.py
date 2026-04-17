@@ -39,7 +39,7 @@ _bucket: TokenBucket | None = None
 
 
 def _get_bucket(rpm: int) -> TokenBucket:
-    global _bucket  # noqa: PLW0603
+    global _bucket
     if _bucket is None:
         _bucket = TokenBucket(
             capacity=float(rpm),
@@ -67,6 +67,6 @@ def rate_limit_check(request: Request) -> None:
 
 def reset_for_tests() -> None:
     """Test-only hook."""
-    global _bucket  # noqa: PLW0603
+    global _bucket
     with _lock:
         _bucket = None

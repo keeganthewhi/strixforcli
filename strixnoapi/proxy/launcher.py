@@ -11,8 +11,12 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.request import Request, urlopen
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 log = logging.getLogger(__name__)
@@ -45,7 +49,7 @@ def _wait_healthy(port: int, token: str, timeout: float = 15.0) -> None:
     while time.monotonic() < deadline:
         try:
             req = Request(url, headers={"Authorization": f"Bearer {token}"})
-            with urlopen(req, timeout=2) as resp:  # noqa: S310
+            with urlopen(req, timeout=2) as resp:
                 if resp.status == 200:
                     return
         except Exception as e:  # noqa: BLE001
@@ -80,7 +84,7 @@ def start_proxy(cli_mode: str, audit_dir: Path, rate_limit_rpm: int = 30) -> Pro
     else:
         kwargs["start_new_session"] = True
 
-    proc = subprocess.Popen(  # noqa: S603
+    proc = subprocess.Popen(
         [sys.executable, "-m", "strixnoapi.proxy.server"],
         **kwargs,
     )

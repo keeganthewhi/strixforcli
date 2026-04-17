@@ -34,7 +34,7 @@ SUBCOMMANDS: dict[str, str] = {
 }
 
 
-def install_proxy() -> "ProxyHandle | None":
+def install_proxy() -> ProxyHandle | None:
     """Boot the proxy if STRIX_CLI_MODE is set. Returns handle or None."""
     cli_mode = os.environ.get("STRIX_CLI_MODE", "").strip().lower()
     if not cli_mode or cli_mode == "api":

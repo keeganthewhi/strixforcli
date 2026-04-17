@@ -3,4 +3,4 @@
 from __future__ import annotations
 
 
-__all__ = ["sarif", "html"]
+__all__ = ["html", "sarif"]

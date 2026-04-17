@@ -9,7 +9,6 @@ to `cursor-agent -p` as a subprocess (see `cursor_subprocess.py` — future).
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -19,6 +18,8 @@ from strixnoapi.proxy.translators.base import BaseTranslator
 
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from strixnoapi.proxy.credentials import OAuth
     from strixnoapi.proxy.settings import ProxySettings
 
@@ -31,7 +32,7 @@ class CursorTranslator(BaseTranslator):
     upstream_url = CURSOR_API_URL
 
     async def complete_openai(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> dict[str, Any]:
         request_body = self._to_cursor(body)
         headers = self._headers(oauth)
@@ -47,43 +48,42 @@ class CursorTranslator(BaseTranslator):
         )
 
     async def stream_openai(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> AsyncIterator[str]:
         request_body = {**self._to_cursor(body), "stream": True}
         headers = self._headers(oauth)
         model = body.get("model") or "cursor-default"
         chat_id = self.make_chat_id()
         try:
-            async with httpx.AsyncClient(timeout=None) as client:
-                async with client.stream(
-                    "POST", CURSOR_API_URL, json=request_body, headers=headers
-                ) as resp:
-                    if resp.status_code >= 400:
-                        body_text = (await resp.aread()).decode("utf-8", errors="replace")
-                        self._raise_for_status_raw(resp.status_code, body_text)
-                    async for line in resp.aiter_lines():
-                        if not line or not line.startswith("data:"):
-                            continue
-                        raw = line.removeprefix("data:").strip()
-                        if raw in ("", "[DONE]"):
-                            if raw == "[DONE]":
-                                break
-                            continue
-                        try:
-                            evt = json.loads(raw)
-                        except json.JSONDecodeError:
-                            continue
-                        content = (
-                            evt.get("choices", [{}])[0].get("delta", {}).get("content")
-                            if evt.get("choices")
-                            else self._extract_text(evt)
+            async with httpx.AsyncClient(timeout=None) as client, client.stream(
+                "POST", CURSOR_API_URL, json=request_body, headers=headers
+            ) as resp:
+                if resp.status_code >= 400:
+                    body_text = (await resp.aread()).decode("utf-8", errors="replace")
+                    self._raise_for_status_raw(resp.status_code, body_text)
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    raw = line.removeprefix("data:").strip()
+                    if raw in ("", "[DONE]"):
+                        if raw == "[DONE]":
+                            break
+                        continue
+                    try:
+                        evt = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    content = (
+                        evt.get("choices", [{}])[0].get("delta", {}).get("content")
+                        if evt.get("choices")
+                        else self._extract_text(evt)
+                    )
+                    if content:
+                        yield self.make_openai_chunk(
+                            {"role": "assistant", "content": content},
+                            model=model,
+                            chat_id=chat_id,
                         )
-                        if content:
-                            yield self.make_openai_chunk(
-                                {"role": "assistant", "content": content},
-                                model=model,
-                                chat_id=chat_id,
-                            )
         except httpx.RequestError as e:
             raise HTTPException(502, f"upstream request failed: {e}") from e
         yield self.make_openai_chunk({}, model=model, finish_reason="stop", chat_id=chat_id)
@@ -98,7 +98,7 @@ class CursorTranslator(BaseTranslator):
         return out
 
     @staticmethod
-    def _headers(oauth: "OAuth") -> dict[str, str]:
+    def _headers(oauth: OAuth) -> dict[str, str]:
         return {
             "authorization": f"Bearer {oauth.access_token}",
             "content-type": "application/json",

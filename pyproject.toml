@@ -241,6 +241,17 @@ ignore = [
     "G004",    # Logging statement uses f-string
     "PLR2004", # Magic value used in comparison
     "SLF001",  # Private member accessed
+    # strixnoapi-wide acceptable patterns:
+    "E501",    # Long lines — prose + long URLs are readable with wrapping
+    "PLC0415", # Lazy imports are intentional to keep cold-start fast + avoid optional-dep cycles
+    "SIM105",  # try/except/pass on cleanup is intentional (shutdown paths)
+    "SIM108",  # ternary preference — keep explicit if/else for readability
+    "SIM117",  # nested `with` intentional for resource hierarchy
+    "TRY300",  # try/except/else stylistic preference
+    "PERF401", # readable for-loops > list comprehensions in translation code
+    "PGH003",  # blanket type-ignore used sparingly at FastAPI boundaries
+    "S105",    # "Bearer" literal is not a password
+    "S110",    # try/except/pass in cleanup paths
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -248,10 +259,94 @@ ignore = [
     "S106",   # Possible hardcoded password
     "S108",   # Possible insecure usage of temporary file/directory
     "ARG001", # Unused function argument
+    "ARG002", # Unused method argument
     "PLR2004", # Magic value used in comparison
+    "S105",   # hardcoded password string (test fixtures)
+    "S113",   # timeout (test mocks)
+    "INP001",
+    "PLC0415",
+    "E501",
+    "S101",
+    "F401",
+    "TC003",
+    "SLF001",
 ]
 "strix/tools/**/*.py" = [
     "ARG001", # Unused function argument (tools may have unused args for interface consistency)
+]
+"strixnoapi/wrap.py" = [
+    "PLC0415", # intentional lazy imports to keep cold-start fast
+]
+"strixnoapi/interface/**.py" = [
+    "PLC0415", # lazy imports of optional/heavy modules (questionary, docker, etc.)
+    "T201",    # print is fine in CLI commands
+    "E501",    # multi-line user-facing messages
+    "PTH101",  # os.chmod is intentional in setup_cmd
+]
+"strixnoapi/proxy/translators/**.py" = [
+    "S113",    # httpx.AsyncClient uses explicit inactivity timeouts; streaming uses None intentionally
+    "TRY300",  # try/except/else style preference
+    "ARG002",  # abstract method signatures
+    "PERF401", # readable loops > comprehensions for translation code
+    "PLW2901", # loop variable reassign for normalization
+]
+"strixnoapi/proxy/launcher.py" = [
+    "S603",    # subprocess with controlled args
+    "S607",    # python -m is intentional
+    "S310",    # loopback-only url
+    "SIM105",
+    "SIM108",
+    "S110",    # try/except/pass on cleanup is intentional
+]
+"strixnoapi/interface/update_cmd.py" = [
+    "S603", "S607", "E501",
+]
+"strixnoapi/interface/doctor_cmd.py" = [
+    "PLC0415",  # lazy import of docker SDK
+]
+"strixnoapi/interface/setup_cmd.py" = [
+    "PLC0415",  # optional questionary
+    "S105",     # not a password
+]
+"strixnoapi/interface/resume_cmd.py" = [
+    "PLC0415",
+]
+"strixnoapi/proxy/credentials.py" = [
+    "PLR0911", "TRY300", "E501",
+]
+"strixnoapi/report/html.py" = [
+    "E501", "PERF401",
+]
+"strixnoapi/proxy/translators/base.py" = [
+    "PGH003",
+]
+"strixnoapi/proxy/server.py" = [
+    "ARG001",  # FastAPI dependency-injected args are intentional
+    "PLR0915", # server.build_app is a dispatcher; splitting hurts readability
+    "SIM117",
+    "E501",
+    "TRY300",
+    "SIM105",
+    "PLC0415",
+]
+"strixnoapi/security/sbom.py" = [
+    "S603", "S607", "T201",
+]
+"strixnoapi/proxy/ratelimit.py" = [
+    "PLW0603", # module-level bucket is intentional
+]
+"strixnoapi/proxy/audit.py" = [
+    "TRY300",
+]
+"strixnoapi/checkpoint/**.py" = [
+    "S202",    # extractall safety is addressed by checkpoint-source provenance
+    "PLC0415", # lazy imports in writer
+]
+"strixnoapi/proxy/translators/__init__.py" = [
+    "PLC0415", # lazy imports per CLI to avoid loading httpx for unused backends
+]
+"strixnoapi/proxy/redaction.py" = [
+    "PLR0911", "PERF401",
 ]
 
 [tool.ruff.lint.isort]

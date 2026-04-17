@@ -6,11 +6,12 @@ import abc
 import json
 import secrets
 import time
-from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from strixnoapi.proxy.credentials import OAuth
     from strixnoapi.proxy.settings import ProxySettings
 
@@ -27,25 +28,25 @@ class BaseTranslator(abc.ABC):
 
     @abc.abstractmethod
     async def complete_openai(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> dict[str, Any]:
         raise NotImplementedError
 
     @abc.abstractmethod
     def stream_openai(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> AsyncIterator[str]:
         raise NotImplementedError
 
     # --- Anthropic-compatible surface (optional — only Claude uses it) ------
 
     async def complete_anthropic(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> dict[str, Any]:
         raise TranslatorError(f"{self.name} does not implement Anthropic wire format")
 
     def stream_anthropic(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> AsyncIterator[str]:
         raise TranslatorError(f"{self.name} does not implement Anthropic streaming")
 

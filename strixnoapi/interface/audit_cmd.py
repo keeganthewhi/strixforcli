@@ -5,12 +5,16 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Sequence
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.panel import Panel
 
 from strixnoapi.proxy.audit import verify_chain
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def main(argv: Sequence[str] | None = None) -> int:

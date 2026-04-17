@@ -6,9 +6,13 @@ import io
 import json
 import tarfile
 from dataclasses import dataclass
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import zstandard as zstd
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -61,4 +65,4 @@ def load_latest_checkpoint(run_dir: Path) -> Checkpoint | None:
 def extract_checkpoint(path: Path, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     with _open_tar(path) as tar:
-        tar.extractall(destination)  # noqa: S202
+        tar.extractall(destination)

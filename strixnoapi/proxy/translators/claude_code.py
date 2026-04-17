@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import time
-from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -14,6 +12,8 @@ from strixnoapi.proxy.translators.base import BaseTranslator
 
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from strixnoapi.proxy.credentials import OAuth
     from strixnoapi.proxy.settings import ProxySettings
 
@@ -29,7 +29,7 @@ class ClaudeCodeTranslator(BaseTranslator):
     upstream_url = ANTHROPIC_URL
 
     async def complete_openai(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> dict[str, Any]:
         anthropic_body = self._to_anthropic(body)
         headers = self._headers(oauth, stream=False)
@@ -47,7 +47,7 @@ class ClaudeCodeTranslator(BaseTranslator):
         )
 
     async def stream_openai(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> AsyncIterator[str]:
         anthropic_body = {**self._to_anthropic(body), "stream": True}
         headers = self._headers(oauth, stream=True)
@@ -55,51 +55,7 @@ class ClaudeCodeTranslator(BaseTranslator):
         chat_id = self.make_chat_id()
 
         try:
-            async with httpx.AsyncClient(timeout=None) as client:
-                async with client.stream(
-                    "POST", ANTHROPIC_URL, json=anthropic_body, headers=headers
-                ) as resp:
-                    if resp.status_code >= 400:
-                        body_text = (await resp.aread()).decode("utf-8", errors="replace")
-                        raise HTTPException(
-                            status_code=resp.status_code,
-                            detail=f"Anthropic error: {body_text[:500]}",
-                        )
-                    async for line in resp.aiter_lines():
-                        if not line or not line.startswith("data:"):
-                            continue
-                        raw = line.removeprefix("data:").strip()
-                        if not raw:
-                            continue
-                        try:
-                            event = json.loads(raw)
-                        except json.JSONDecodeError:
-                            continue
-                        chunk = self._translate_stream_event(event, model, chat_id)
-                        if chunk:
-                            yield chunk
-        except httpx.RequestError as e:
-            raise HTTPException(502, f"upstream request failed: {e}") from e
-
-        yield self.make_openai_chunk(delta={}, model=model, finish_reason="stop", chat_id=chat_id)
-        yield self.sse_done()
-
-    async def complete_anthropic(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
-    ) -> dict[str, Any]:
-        headers = self._headers(oauth, stream=False)
-        async with httpx.AsyncClient(timeout=settings.inactivity_timeout_s) as client:
-            resp = await client.post(ANTHROPIC_URL, json=body, headers=headers)
-        self._raise_for_status(resp)
-        return resp.json()
-
-    async def stream_anthropic(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
-    ) -> AsyncIterator[str]:
-        anthropic_body = {**body, "stream": True}
-        headers = self._headers(oauth, stream=True)
-        async with httpx.AsyncClient(timeout=None) as client:
-            async with client.stream(
+            async with httpx.AsyncClient(timeout=None) as client, client.stream(
                 "POST", ANTHROPIC_URL, json=anthropic_body, headers=headers
             ) as resp:
                 if resp.status_code >= 400:
@@ -109,12 +65,54 @@ class ClaudeCodeTranslator(BaseTranslator):
                         detail=f"Anthropic error: {body_text[:500]}",
                     )
                 async for line in resp.aiter_lines():
-                    if line:
-                        yield f"{line}\n"
+                    if not line or not line.startswith("data:"):
+                        continue
+                    raw = line.removeprefix("data:").strip()
+                    if not raw:
+                        continue
+                    try:
+                        event = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    chunk = self._translate_stream_event(event, model, chat_id)
+                    if chunk:
+                        yield chunk
+        except httpx.RequestError as e:
+            raise HTTPException(502, f"upstream request failed: {e}") from e
+
+        yield self.make_openai_chunk(delta={}, model=model, finish_reason="stop", chat_id=chat_id)
+        yield self.sse_done()
+
+    async def complete_anthropic(
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
+    ) -> dict[str, Any]:
+        headers = self._headers(oauth, stream=False)
+        async with httpx.AsyncClient(timeout=settings.inactivity_timeout_s) as client:
+            resp = await client.post(ANTHROPIC_URL, json=body, headers=headers)
+        self._raise_for_status(resp)
+        return resp.json()
+
+    async def stream_anthropic(
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
+    ) -> AsyncIterator[str]:
+        anthropic_body = {**body, "stream": True}
+        headers = self._headers(oauth, stream=True)
+        async with httpx.AsyncClient(timeout=None) as client, client.stream(
+            "POST", ANTHROPIC_URL, json=anthropic_body, headers=headers
+        ) as resp:
+            if resp.status_code >= 400:
+                body_text = (await resp.aread()).decode("utf-8", errors="replace")
+                raise HTTPException(
+                    status_code=resp.status_code,
+                    detail=f"Anthropic error: {body_text[:500]}",
+                )
+            async for line in resp.aiter_lines():
+                if line:
+                    yield f"{line}\n"
 
     # ---- helpers ---------------------------------------------------------
 
-    def _headers(self, oauth: "OAuth", stream: bool) -> dict[str, str]:
+    def _headers(self, oauth: OAuth, stream: bool) -> dict[str, str]:
         h = {
             "content-type": "application/json",
             "anthropic-version": ANTHROPIC_VERSION,

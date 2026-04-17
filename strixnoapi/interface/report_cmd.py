@@ -6,12 +6,16 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Sequence
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 
 from strixnoapi.report.html import render_html
 from strixnoapi.report.sarif import render_sarif
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def main(argv: Sequence[str] | None = None) -> int:

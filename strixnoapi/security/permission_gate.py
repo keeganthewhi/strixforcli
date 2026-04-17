@@ -8,8 +8,11 @@ advisory (return True) unless STRIX_ENFORCE_WINDOWS_ACL=1.
 from __future__ import annotations
 
 import os
-import stat
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def check_permissions(path: Path) -> tuple[bool, str]:

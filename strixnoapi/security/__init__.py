@@ -3,4 +3,4 @@
 from __future__ import annotations
 
 
-__all__ = ["permission_gate", "sandbox_profile", "egress_allowlist", "secret_patterns", "sbom"]
+__all__ = ["egress_allowlist", "permission_gate", "sandbox_profile", "sbom", "secret_patterns"]

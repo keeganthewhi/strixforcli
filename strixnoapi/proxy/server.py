@@ -6,10 +6,10 @@ carry config into the child (see `ProxySettings.from_env`).
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
-import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -25,24 +25,38 @@ from strixnoapi.proxy.translators import get_translator
 from strixnoapi.proxy.validation import flatten_text, validate_request_body
 
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+
 log = logging.getLogger("strixnoapi.proxy")
 
 
 def build_app(settings: ProxySettings | None = None) -> FastAPI:
-    app = FastAPI(title="strixnoapi-proxy", version="0.1.0", docs_url=None, redoc_url=None)
-
     if settings is None:
         settings = ProxySettings.from_env()
 
+    @contextlib.asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        app.state.settings = settings
+        app.state.audit = AuditLogger(settings.audit_dir / f"proxy-{os.getpid()}.jsonl")
+        try:
+            yield
+        finally:
+            with contextlib.suppress(Exception):
+                app.state.audit.close()
+
+    app = FastAPI(
+        title="strixnoapi-proxy",
+        version="0.1.0",
+        docs_url=None,
+        redoc_url=None,
+        lifespan=lifespan,
+    )
+    # Populate state immediately for in-process (TestClient) usage that
+    # inspects state before a request triggers lifespan.
     app.state.settings = settings
     app.state.audit = AuditLogger(settings.audit_dir / f"proxy-{os.getpid()}.jsonl")
-
-    @app.on_event("shutdown")
-    async def _shutdown() -> None:  # pragma: no cover
-        try:
-            app.state.audit.close()
-        except Exception:  # noqa: BLE001
-            pass
 
     @app.get("/health")
     async def health() -> dict[str, Any]:

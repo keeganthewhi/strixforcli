@@ -12,9 +12,12 @@ import os
 import threading
 import time
 from contextlib import AbstractContextManager
-from pathlib import Path
-from types import TracebackType
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from types import TracebackType
 
 
 GENESIS_HASH = "0" * 64
@@ -61,10 +64,10 @@ class AuditLogger(AbstractContextManager["AuditLogger"]):
             return GENESIS_HASH
         last: str | None = None
         with self.path.open("r", encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if line:
-                    last = line
+            for raw in fh:
+                stripped = raw.strip()
+                if stripped:
+                    last = stripped
         if not last:
             return GENESIS_HASH
         try:
@@ -83,12 +86,12 @@ def verify_chain(path: Path) -> tuple[bool, int, str | None]:
     n = 0
     with path.open("r", encoding="utf-8") as fh:
         for lineno, raw in enumerate(fh, start=1):
-            raw = raw.strip()
-            if not raw:
+            line = raw.strip()
+            if not line:
                 continue
             n += 1
             try:
-                entry = json.loads(raw)
+                entry = json.loads(line)
             except json.JSONDecodeError as e:
                 return False, n, f"line {lineno}: invalid JSON: {e}"
             if entry.get("prev_hash") != prev:

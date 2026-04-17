@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -13,6 +12,8 @@ from strixnoapi.proxy.translators.base import BaseTranslator
 
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from strixnoapi.proxy.credentials import OAuth
     from strixnoapi.proxy.settings import ProxySettings
 
@@ -26,7 +27,7 @@ class GeminiTranslator(BaseTranslator):
     upstream_url = GEMINI_API_BASE
 
     async def complete_openai(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> dict[str, Any]:
         gemini_body, model = self._to_gemini(body)
         url = f"{GEMINI_API_BASE}/{model}:generateContent"
@@ -40,7 +41,7 @@ class GeminiTranslator(BaseTranslator):
         return self.make_openai_envelope(content=text, model=model, usage=usage)
 
     async def stream_openai(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> AsyncIterator[str]:
         gemini_body, model = self._to_gemini(body)
         url = f"{GEMINI_API_BASE}/{model}:streamGenerateContent?alt=sse"
@@ -118,7 +119,7 @@ class GeminiTranslator(BaseTranslator):
         return ""
 
     @staticmethod
-    def _headers(oauth: "OAuth") -> dict[str, str]:
+    def _headers(oauth: OAuth) -> dict[str, str]:
         return {
             "authorization": f"Bearer {oauth.access_token}",
             "content-type": "application/json",

@@ -21,7 +21,7 @@ class ProxySettings:
     max_message_bytes: int = 256 * 1024
 
     @classmethod
-    def from_env(cls) -> "ProxySettings":
+    def from_env(cls) -> ProxySettings:
         port = int(os.environ["STRIX_PROXY_PORT"])
         token = os.environ["STRIX_PROXY_TOKEN"]
         cli_mode = os.environ["STRIX_PROXY_CLI_MODE"]

@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import logging
 import secrets
-from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -22,6 +21,8 @@ from strixnoapi.proxy.translators.base import BaseTranslator
 
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from strixnoapi.proxy.credentials import OAuth
     from strixnoapi.proxy.settings import ProxySettings
 
@@ -37,7 +38,7 @@ class CodexTranslator(BaseTranslator):
     upstream_url = CODEX_CHAT_URL
 
     async def complete_openai(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> dict[str, Any]:
         collected: list[str] = []
         async for chunk in self._stream_raw(body, oauth, settings):
@@ -48,7 +49,7 @@ class CodexTranslator(BaseTranslator):
         return self.make_openai_envelope(content=text, model=model)
 
     async def stream_openai(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> AsyncIterator[str]:
         model = body.get("model") or CODEX_MODEL_DEFAULT
         chat_id = self.make_chat_id()
@@ -62,13 +63,13 @@ class CodexTranslator(BaseTranslator):
                     )
         except HTTPException:
             raise
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise HTTPException(502, f"Codex upstream failure: {e}") from e
         yield self.make_openai_chunk({}, model=model, finish_reason="stop", chat_id=chat_id)
         yield self.sse_done()
 
     async def _stream_raw(
-        self, body: dict[str, Any], oauth: "OAuth", settings: "ProxySettings"
+        self, body: dict[str, Any], oauth: OAuth, settings: ProxySettings
     ) -> AsyncIterator[str]:
         system, msgs = self.extract_system_and_messages(body)
         payload = self._make_codex_payload(
@@ -104,10 +105,7 @@ class CodexTranslator(BaseTranslator):
                     if not parts:
                         continue
                     full = "".join(p for p in parts if isinstance(p, str))
-                    if full.startswith(last_text):
-                        delta = full[len(last_text):]
-                    else:
-                        delta = full
+                    delta = full[len(last_text):] if full.startswith(last_text) else full
                     if delta:
                         yield delta
                     last_text = full
@@ -156,7 +154,7 @@ class CodexTranslator(BaseTranslator):
         return ""
 
     @staticmethod
-    def _headers(oauth: "OAuth") -> dict[str, str]:
+    def _headers(oauth: OAuth) -> dict[str, str]:
         return {
             "authorization": f"Bearer {oauth.access_token}",
             "content-type": "application/json",

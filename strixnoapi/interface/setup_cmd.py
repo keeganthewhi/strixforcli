@@ -7,7 +7,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Sequence
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.panel import Panel
@@ -15,6 +15,10 @@ from rich.table import Table
 from rich.text import Text
 
 from strixnoapi.interface.detector import DETECTION_ORDER, detect_all
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 CONFIG_DIR = Path.home() / ".strix"
@@ -70,20 +74,26 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _choose(args: argparse.Namespace, detections: dict) -> str | None:
     if args.cli:
-        d = detections[args.cli]
-        if not d.installed:
-            return None
-        return args.cli
+        return args.cli if detections[args.cli].installed else None
     if args.auto:
-        for name in DETECTION_ORDER:
-            d = detections[name]
-            if d.installed and d.authenticated:
-                return name
-        return None
-    # Interactive
-    candidates = [n for n in DETECTION_ORDER if detections[n].installed and detections[n].authenticated]
+        return _first_authenticated(detections)
+    candidates = [
+        n for n in DETECTION_ORDER
+        if detections[n].installed and detections[n].authenticated
+    ]
     if not candidates:
         return None
+    return _prompt_user(candidates)
+
+
+def _first_authenticated(detections: dict) -> str | None:
+    for name in DETECTION_ORDER:
+        if detections[name].installed and detections[name].authenticated:
+            return name
+    return None
+
+
+def _prompt_user(candidates: list[str]) -> str:
     try:
         import questionary
     except ImportError:
