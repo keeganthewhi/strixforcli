@@ -113,9 +113,9 @@ quickstart:
 	uv run strix doctor
 
 fresh-clone-test:
-	@echo "🧪 Simulating fresh-user install in /tmp/strixnoapi-freshtest"
-	rm -rf /tmp/strixnoapi-freshtest
-	git clone https://github.com/keeganthewhi/strixnoapi.git /tmp/strixnoapi-freshtest
-	cd /tmp/strixnoapi-freshtest && uv sync && uv run pytest tests/strixnoapi/ --no-cov -q
-	cd /tmp/strixnoapi-freshtest && uv run strix version
-	cd /tmp/strixnoapi-freshtest && uv run strix doctor || echo "(doctor reports issues; expected on CI without auth'd CLI)"
+	@echo "🧪 Simulating fresh-user install in /tmp/strix-noapi-freshtest"
+	rm -rf /tmp/strix-noapi-freshtest
+	git clone https://github.com/keeganthewhi/strix-noapi.git /tmp/strix-noapi-freshtest
+	cd /tmp/strix-noapi-freshtest && uv sync && uv run pytest tests/strixnoapi/ --no-cov -q
+	cd /tmp/strix-noapi-freshtest && uv run strix version
+	cd /tmp/strix-noapi-freshtest && uv run strix doctor || echo "(doctor reports issues; expected on CI without auth'd CLI)"

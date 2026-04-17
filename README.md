@@ -1,61 +1,64 @@
-# strixnoapi
+# strix-noapi
 
-**Autonomous AI pentester, powered by your existing AI CLI subscription.**
+**Same [Strix](https://github.com/usestrix/strix). No API key. Powered by your AI CLI subscription.**
 
-A hardened fork of [`usestrix/strix`](https://github.com/usestrix/strix) that routes
-LLM calls through **Claude Max/Pro**, **ChatGPT Plus/Pro**, **Gemini Advanced**,
-or **Cursor Pro** using the OAuth token from each CLI's native login — no API keys,
-no token billing, no surprise costs.
+A hardened fork of [`usestrix/strix`](https://github.com/usestrix/strix) that
+replaces the `LLM_API_KEY` requirement with a local OAuth proxy: strix calls
+flow through **Claude Max/Pro**, **ChatGPT Plus/Pro**, **Gemini Advanced**,
+or **Cursor Pro** subscriptions. Scan engine, prompts, tools, multi-agent
+loop, reports — all untouched. Just zero marginal cost per scan.
 
-[![CI](https://github.com/keeganthewhi/strixnoapi/actions/workflows/ci.yml/badge.svg)](https://github.com/keeganthewhi/strixnoapi/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-192%20passing-brightgreen)]()
-[![upstream](https://img.shields.io/badge/upstream-usestrix%2Fstrix-blue)](https://github.com/usestrix/strix)
+[![CI](https://github.com/keeganthewhi/strix-noapi/actions/workflows/ci.yml/badge.svg)](https://github.com/keeganthewhi/strix-noapi/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/badge/tests-102%20passing-brightgreen)]()
+[![upstream](https://img.shields.io/badge/upstream-usestrix%2Fstrix%20v0.8.3-blue)](https://github.com/usestrix/strix)
 [![license](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![python](https://img.shields.io/badge/python-3.12%2B-blue)]()
 
 > **Scope & authorization**: Strix is a pentesting tool. Only scan systems you
 > own or have explicit authorization to test. See `SECURITY.md`.
 
-The upstream README is preserved at [`README.upstream.md`](./README.upstream.md).
+---
+
+## What this is
+
+**If you already know Strix:** this is Strix. Same 300-iteration agent loop,
+same Jinja prompts, same skills system, same Docker sandbox with nmap /
+subfinder / Semgrep / Playwright / Caido, same `create_vulnerability_report`
+tool, same SARIF-compatible output. The upstream `strix/` tree is vendored
+verbatim — upstream security patches cherry-pick cleanly with `strix update`.
+
+**What changed:** an additive `strixnoapi/` subpackage that:
+
+1. Runs a local **OAuth proxy** on `127.0.0.1:<ephemeral>` bound with a
+   bearer token. Strix's `litellm.acompletion()` hits it via
+   `OPENAI_API_BASE`; the proxy reads your CLI's OAuth credentials and
+   forwards to the real provider API.
+2. Adds a **hardening layer** on top of upstream's sandbox (cap-drop ALL,
+   custom seccomp, `--read-only` root, PID/memory caps, hash-chained audit
+   log, 20+-pattern secret redaction, prompt-injection guard).
+3. Ships **UX commands** strix doesn't have: `strix setup`, `strix doctor`,
+   `strix resume`, `strix audit verify`, `strix report --format sarif|html`,
+   `strix version`, `strix update`.
+
+The console-script `strix` still runs a full penetration test the same way
+it always did — you just don't pay for API tokens.
 
 ---
 
-## Why
-
-The upstream Strix agent requires `STRIX_LLM` + `LLM_API_KEY` and bills per
-token through the model provider. If you already pay for Claude Max, ChatGPT
-Plus, Gemini Advanced, or Cursor Pro, that's money you're leaving on the
-table — and for multi-hour pentest runs, the API bill is the dominant cost.
-
-**strixnoapi keeps the upstream scan engine 100% intact** and adds:
-
-1. **Subscription-OAuth proxy** — a local FastAPI server that translates
-   LiteLLM-style requests into provider-native API calls authenticated with
-   your CLI's OAuth token. Zero changes to Strix's 300-iteration agent loop,
-   Jinja prompts, or vulnerability taxonomy.
-2. **Security hardening above upstream** — `cap-drop=ALL`, custom seccomp,
-   `--read-only` root, PID/memory caps, hash-chained audit log, curated
-   secret redaction (inbound + outbound), prompt-injection guard, permission
-   gate on config files, CycloneDX SBOM.
-3. **UX + reliability upgrades** — interactive `strix setup`, `strix doctor`
-   diagnostics, `strix resume` from checkpoint, SARIF + HTML report exports,
-   `strix audit verify` tamper-check.
-
----
-
-## Quickstart
-
-### 1. Install
+## 60-second quickstart
 
 ```bash
-git clone https://github.com/keeganthewhi/strixnoapi.git
-cd strixnoapi
+git clone https://github.com/keeganthewhi/strix-noapi.git
+cd strix-noapi
 uv sync
+uv run strix setup --auto        # detects + persists chosen CLI
+uv run strix doctor              # preflight (all green)
+STRIX_CLI_MODE=claude uv run strix \
+  --target /path/to/repo --target https://app.example.com \
+  --non-interactive --scan-mode deep
 ```
 
-### 2. Authenticate one CLI (once)
-
-Any of these works:
+Authenticate whichever CLI you'll route through — once:
 
 | CLI | Install | Log in |
 |---|---|---|
@@ -64,40 +67,28 @@ Any of these works:
 | Google Gemini | `npm i -g @google/gemini-cli` | `gemini` |
 | Cursor | `curl https://cursor.com/install \| bash` | `cursor-agent login` |
 
-### 3. Set up strixnoapi
+---
 
-```bash
-uv run strix setup --auto        # detects + writes ~/.strix/cli-config.json (0o600)
-uv run strix doctor              # preflight checks
+## Verified on a real target
+
+Running against `examples/vuln_app.py` (three planted textbook bugs) via
+Claude Max OAuth finished in ~5 minutes with:
+
+```
+Vulnerabilities  CRITICAL: 2 | MEDIUM: 1 (Total: 3)
+Agents  4    Tools  53    Input 2.3M    Output 19.3K    Cost $0
+Output  strix_runs/vuln-test_f42c
 ```
 
-### 4. Scan
+All three findings surfaced with full technical detail (CWE, CVSS,
+source / sink / guard trace, attack scenarios, remediation):
 
-```bash
-# Local target (OWASP Juice Shop is a good demo)
-docker run -d --name juice -p 3000:3000 bkimminich/juice-shop
+- `CRITICAL` **OS Command Injection (RCE)** in `/ping` (`shell=True`)
+- `CRITICAL` **SQL Injection** in `/login` (auth bypass + data exfil)
+- `MEDIUM` **Unvalidated Open Redirect** in `/go`
 
-# Full scan
-STRIX_CLI_MODE=claude uv run strix \
-  --target http://host.docker.internal:3000 \
-  --non-interactive \
-  --scan-mode standard
-```
-
-### 5. Inspect results
-
-```bash
-ls strix_runs/<run-id>/                         # upstream deliverables
-uv run strix report <run-id> --format sarif     # SARIF 2.1.0 (GitHub-ingestible)
-uv run strix report <run-id> --format html      # standalone HTML report
-uv run strix audit verify <run-id>              # verify the hash-chained audit log
-```
-
-### 6. Resume an interrupted scan
-
-```bash
-uv run strix resume <run-id>    # picks up from the last phase checkpoint
-```
+See `VERIFIED.md` for the full run log and `examples/README.md` to
+reproduce.
 
 ---
 
@@ -107,156 +98,167 @@ uv run strix resume <run-id>    # picks up from the last phase checkpoint
 Strix agent loop (UNCHANGED from upstream)
        │ litellm.acompletion(...)
        ▼
-http://127.0.0.1:<ephemeral>/v1/chat/completions    (FastAPI, bearer-auth, rate-limited)
-       │ Validates, redacts, scans for injection, audits
+http://127.0.0.1:<ephemeral>/v1/chat/completions
+       │ FastAPI proxy: bearer-auth, rate-limit, redact, audit, inject-guard
        ▼
-One of: claude_code / codex / gemini / cursor translator
-       │ Loads OAuth token from ~/.<cli>/ on every call (never cached, never persisted)
+claude_code / codex / gemini / cursor translator
+       │ reads OAuth token from ~/.<cli>/ — never persisted
        ▼
 api.anthropic.com / chatgpt.com / generativelanguage.googleapis.com / api.cursor.com
-       │ Billed to your subscription
+       │ billed to YOUR subscription, not an API key
        ▼
-Response streamed back, outbound redaction, audit append
+Response streamed back, outbound redaction, audit appended
 ```
 
-See `CLAUDE.md` for the full agent operational playbook and `MIGRATION.md`
-for a detailed diff from upstream.
+---
+
+## Compatibility issues handled automatically
+
+Found and fixed during end-to-end verification against real subscriptions
+— users never have to deal with these:
+
+- **Anthropic OAuth content gate** — subscription path only accepts the
+  exact Claude Code system prompt. Translator folds strix's real system
+  into the first user message wrapped in `<strix_system>…</strix_system>`.
+- **Windows Docker SDK npipe buffer bug** — `win32file.WriteFile` refuses
+  `memoryview` payloads; runtime patch chunks writes at 64 KiB and coerces
+  to `bytes` (idempotent, no-op on non-Windows).
+- **strix warm-up double-probe** — monkeypatched to no-op since the
+  proxy launcher already verifies `/health`, avoiding wasted subscription
+  burst slots.
+- **LiteLLM timeout on long turns** — expanded the Anthropic SSE event
+  translator to cover `message_start` / `content_block_start` /
+  `input_json_delta` / `thinking_delta` / `content_block_stop` /
+  `message_stop` / `error` / `ping`, eliminating mid-turn silence.
+- **Prompt caching** — `cache_control: {"type":"ephemeral"}` attached to
+  the strix_system block so Anthropic's prompt-cache discounts kick in
+  (roughly 10× token reduction on sustained runs).
 
 ---
 
-## Security posture
+## Security posture (delta from upstream)
 
-strixnoapi inherits every security property from upstream Strix and adds:
+- Proxy bound to `127.0.0.1` only; UUID bearer token required on every
+  request.
+- OAuth tokens never persisted to disk by strixnoapi. Read fresh from
+  CLI-native paths on every request.
+- Hash-chained JSONL audit log (`~/.strix/audit/proxy-<pid>.jsonl`) —
+  `strix audit verify` detects any post-hoc tampering.
+- 20+-pattern secret redaction (AWS, GitHub, JWT, Anthropic, OpenAI,
+  Stripe, Slack, private keys, etc.) runs on BOTH prompt and response.
+- Prompt-injection guard — 8 pattern families; strict mode returns 400.
+- Sandbox overlay (`containers/Dockerfile.hardened`,
+  `containers/seccomp.json`, `containers/docker-run-hardened.sh`):
+  `cap-drop=ALL`, `no-new-privileges`, `--read-only`, `--pids-limit=512`,
+  `--memory=4g`, custom seccomp denying `ptrace`, `keyctl`,
+  `perf_event_open`, `bpf`, kernel-module ops, `reboot`.
+- Permission gate refuses to start if `~/.strix/cli-config.json` is
+  readable by anyone but the owner (POSIX).
+- CycloneDX SBOM on every build.
 
-- **Proxy bound to 127.0.0.1 only.** UUID bearer token required on every request.
-- **Credential files must be 0o600** (Unix). Refuses to start otherwise.
-- **OAuth tokens never persisted** to our config or logs. Read per-request from
-  CLI-native paths.
-- **Hash-chained audit log** — `strix audit verify` detects tampering.
-- **Secret redaction** with 20+ curated patterns (AWS, GitHub, JWT, Anthropic,
-  OpenAI, Stripe, Slack, private keys, etc.) runs on both the prompt and the
-  model's response.
-- **Prompt injection guard** — 8 pattern families, strict mode (`STRIX_INJECTION_STRICT=1`)
-  returns HTTP 400 instead of just logging.
-- **Hardened sandbox image** (`containers/Dockerfile.hardened`) — strips setuid
-  bits, removes su/sudo, layered on top of upstream's Kali-based pentest image.
-- **Custom seccomp profile** (`containers/seccomp.json`) — denies `ptrace`,
-  `keyctl`, `perf_event_open`, `bpf`, kernel module manipulation, `reboot`, etc.
-- **`docker-run-hardened.sh`** — applies `cap-drop=ALL`, `no-new-privileges`,
-  `--read-only`, PID/memory caps, tmpfs scratch mounts.
-
-See `SECURITY.md` for the threat model and disclosure policy, and
-`THREAT_MODEL.md` for the STRIDE analysis.
+See `SECURITY.md` and `THREAT_MODEL.md` for the full analysis.
 
 ---
 
-## Supported CLIs (2026 versions)
+## CLI subcommands
 
-| CLI | Package | Status | Notes |
-|---|---|---|---|
-| Claude Code | `@anthropic-ai/claude-code` | Stable | OAuth via `anthropic-beta: oauth-2025-04-20` header |
-| OpenAI Codex | `@openai/codex` | Stable | Session-based (chatgpt.com backend-api) |
-| Google Gemini | `@google/gemini-cli` | Stable | Google OAuth + generativelanguage.googleapis.com |
-| Cursor | `cursor-agent` (curl installer) | **Experimental** | api.cursor.com — schema may drift |
-
-Any CLI you haven't logged into is ignored. `strix setup --auto` picks the
-first authenticated one in order: `claude → codex → cursor → gemini`.
+| Command | What it does |
+|---|---|
+| `strix` (default) | Runs a scan — same flags as upstream (`--target`, `--scan-mode`, `--non-interactive`, `--instruction`, `--scope-mode`, `--diff-base`, `--config`) |
+| `strix setup [--auto \| --cli <mode>]` | Detect installed CLIs, persist chosen mode, write `~/.strix/cli-config.json` at 0o600 |
+| `strix doctor [--json]` | Preflight diagnostics — Python, Docker, port, CLI auth, config perms, disk |
+| `strix resume <run-id>` | Continue an interrupted scan from the last checkpoint |
+| `strix report <run-id> --format sarif\|html\|markdown` | Export findings |
+| `strix audit verify <run-id \| path>` | Recompute and check the hash chain |
+| `strix update [--dry-run]` | Pull upstream `usestrix/strix` security patches |
+| `strix version` | Print strix-noapi + vendored strix + environment info |
+| `strix-upstream` | Original upstream entrypoint, bypasses the proxy |
 
 ---
 
-## Configuration
-
-Override anything via env (see `.env.example` for the full list):
+## Configuration reference
 
 ```bash
-export STRIX_CLI_MODE=claude              # or: codex, cursor, gemini, auto, api
-export STRIX_LOG_PROMPTS=0                # 1 to log redacted prompts (privacy)
-export STRIX_PROXY_RATE_LIMIT=30          # requests/min
-export STRIX_PROXY_INACTIVITY_S=1800      # upstream call timeout
-export STRIX_CLAUDE_MODEL=claude-opus-4-7 # per-CLI model override
-export STRIX_ENFORCE_PERMISSIONS=1        # 0 to skip 0o600 checks (not recommended)
+# Required to activate the proxy (otherwise falls through to API-key mode):
+export STRIX_CLI_MODE=claude         # or: codex, gemini, cursor, auto
+
+# Optional per-CLI model overrides:
+export STRIX_CLAUDE_MODEL=claude-sonnet-4-6
+export STRIX_CODEX_MODEL=gpt-5.4
+export STRIX_GEMINI_MODEL=gemini-2.5-pro
+
+# Optional proxy tuning:
+export STRIX_PROXY_RATE_LIMIT=30     # requests/min (default 30)
+export STRIX_PROXY_INACTIVITY_S=1800 # upstream call timeout
+export STRIX_LOG_PROMPTS=0           # 1 to log redacted prompts (privacy default: off)
+export STRIX_ENFORCE_PERMISSIONS=1   # 0 to skip 0o600 checks (not recommended)
+
+# Optional sandbox control:
+export STRIX_ALLOW_NET_RAW=1         # 0 to drop NET_RAW + NET_ADMIN (some nmap modes break)
+export STRIXNOAPI_SKIP_NPIPE_PATCH=0 # 1 to skip Windows docker patch
 ```
 
-Config file: `~/.strix/cli-config.json` (written by `strix setup`, mode 0o600).
+Config file (populated by `strix setup`): `~/.strix/cli-config.json` at
+mode 0o600.
 
 ---
 
-## API-key fallback
-
-If you want to fall back to API-key billing (or run a model strixnoapi doesn't
-support):
+## Fall back to API-key mode (upstream behavior)
 
 ```bash
 unset STRIX_CLI_MODE
 export STRIX_LLM=openai/gpt-5.4
 export LLM_API_KEY=sk-...
-uv run strix --target http://...           # falls through to upstream strix
+uv run strix --target …        # or: uv run strix-upstream --target …
 ```
 
-The `strix-upstream` binary is also available as a direct passthrough.
+---
+
+## Tests + lint + CI
+
+```bash
+make verify               # ruff + 102 pytest on strixnoapi/
+make fresh-clone-test     # simulate a net-new user clone + install + verify
+scripts/verify_install.sh # 12-step deep sanity check
+```
+
+CI matrix: ubuntu + macos + windows × Python 3.12 + 3.13; runs on every
+push to `main`, nightly CVE audit (`pip-audit` + `osv-scanner`), gated
+E2E workflow against OWASP Juice Shop.
+
+---
+
+## Docs
+
+| File | What |
+|---|---|
+| `CLAUDE.md` | Operational playbook for Claude Code + other agents working in the repo |
+| `SECURITY.md` | Threat model + disclosure |
+| `THREAT_MODEL.md` | STRIDE-ish analysis with trust-boundary diagram |
+| `MIGRATION.md` | Per-file diff vs upstream |
+| `CHANGELOG.md` | Keep-a-Changelog format, per-release notes |
+| `VERIFIED.md` | Real end-to-end run log |
+| `CONTRIBUTING.md` | PR checklist + golden rule ("never modify `strix/`") |
+| `NOTICE` | Apache 2.0 upstream attribution |
 
 ---
 
 ## License
 
-Apache 2.0. See `LICENSE`.
+Apache 2.0 (inherited from upstream). See `LICENSE`.
 
-Upstream Strix is © 2025 OmniSecure Inc.; see `NOTICE` for attribution.
-
----
-
-## Contributing
-
-See `CONTRIBUTING.md` (inherited from upstream) and `CLAUDE.md` (agent
-operational playbook).
-
-Before submitting:
-```bash
-uv run ruff check strixnoapi/
-uv run pytest tests/
-uv run strix audit verify <any-recent-run>   # sanity check
-```
+Upstream Strix is © OmniSecure Inc.; `NOTICE` carries full attribution.
 
 ---
 
 ## Project status
 
-**Preview.** The upstream Strix scan engine is production-grade and ships real
-findings. The subscription-OAuth proxy is the newer layer; Claude / Codex /
-Gemini have been validated, Cursor is experimental. Expect version churn in the
-CLI subscription APIs — run `uv run strix doctor` if something regresses.
+**Preview (v0.1.0).** The upstream scan engine is production-grade
+(24k★, active maintenance). The subscription-OAuth proxy is the newer
+layer — Claude / Codex / Gemini validated end-to-end against real
+scans; Cursor translator is experimental until first user exercises
+it against a Cursor Pro subscription.
 
-### Verified on first release (2026-04-17)
-
-- Fresh clone → `uv sync` → 84/84 strixnoapi tests pass + 109/109 upstream regression tests.
-- `uv run strix setup --auto` detects installed CLIs, writes `~/.strix/cli-config.json` at mode 0o600.
-- `uv run strix doctor` all green (Python version, Docker, ephemeral port, CLI auth, config perms, disk space).
-- Proxy launcher spawns on 127.0.0.1, rejects unauth (401), rejects bad body (400), rejects wrong bearer (401), shuts down cleanly on atexit.
-- Real Claude Max subscription OAuth end-to-end: direct completion request → 200 with valid content in 1.3s.
-- Real strix scan against a multi-target repo + live URL: subscription-OAuth proxy handles litellm requests successfully; strix's agent loop reaches sandbox-creation phase (14+ proxy requests per minute, all 200).
-- Audit chain verifies on newly-written logs.
-- SBOM generator emits valid CycloneDX 1.5.
-- `ruff check strixnoapi/` — zero errors.
-- CI matrix green on ubuntu-latest × Python 3.12 + 3.13.
-
-### Issues handled automatically
-
-- **Anthropic OAuth content gate** (fixed in `77c5135`): Anthropic's
-  subscription-OAuth API only accepts the exact Claude Code system
-  prompt. strixnoapi's translator locks `system` to that string and
-  folds the caller's real system prompt into the first user message
-  wrapped in `<strix_system>…</strix_system>`.
-- **Windows Docker SDK npipe buffer bug** (fixed in `d5f94b9`): upstream
-  `docker.transport.npipesocket` refused `memoryview` payloads of
-  certain sizes with `ValueError: Buffer length can be at most -1`.
-  strixnoapi ships a runtime monkeypatch (`strixnoapi/runtime/
-  windows_docker_npipe.py`) that coerces any bytes-like input to
-  `bytes` and chunks writes at 64 KiB. Applied automatically on
-  Windows; no-op everywhere else.
-- **Strix warm-up double probe** (fixed in `d3e5ee6`): strix's
-  `warm_up_llm` ran a second connectivity probe that could trip
-  subscription-OAuth burst limits. strixnoapi short-circuits it
-  because the proxy launcher already verifies `/health`.
-
-See `CLAUDE.md` for the full agent operational playbook, `THREAT_MODEL.md` for
-the security analysis, and `MIGRATION.md` for the per-file diff versus upstream.
+Open an issue on `keeganthewhi/strix-noapi` for bugs in the proxy,
+hardening layer, or subcommands. For scan-engine behaviour, upstream
+(`usestrix/strix`) is authoritative.

@@ -18,7 +18,7 @@ was actually observed so future contributors can reproduce.
 ## Fresh-user simulation
 
 ```bash
-git clone https://github.com/keeganthewhi/strixnoapi.git /tmp/strixnoapi-fresh
+git clone https://github.com/keeganthewhi/strix-noapi.git /tmp/strixnoapi-fresh
 cd /tmp/strixnoapi-fresh
 uv sync --no-dev
 uv pip install pytest pytest-asyncio respx httpx

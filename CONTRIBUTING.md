@@ -17,8 +17,8 @@ All strixnoapi additions go under `strixnoapi/`.
 ### Quickstart
 
 ```bash
-git clone https://github.com/keeganthewhi/strixnoapi.git
-cd strixnoapi
+git clone https://github.com/keeganthewhi/strix-noapi.git
+cd strix-noapi
 uv sync
 make verify                       # ruff + pytest on strixnoapi/
 uv run strix setup --auto         # authenticate
