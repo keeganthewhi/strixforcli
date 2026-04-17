@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-test:
+    name: lint + test (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install base dependencies
+        run: uv sync --no-dev
+
+      - name: Install dev + test dependencies
+        run: uv sync --extra sandbox || uv pip install pytest pytest-asyncio respx httpx pytest-httpx pytest-cov pytest-mock ruff
+
+      - name: Ruff (strixnoapi)
+        run: uv run ruff check strixnoapi/
+
+      - name: Pytest (strixnoapi)
+        run: uv run pytest tests/strixnoapi/ --no-cov -v
+
+      - name: Pytest (upstream tests — regression guard)
+        if: matrix.os != 'windows-latest'
+        run: uv run pytest tests/ --ignore=tests/runtime --no-cov
+
+  security-audit:
+    name: security audit (CVE + SBOM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install strixnoapi
+        run: uv sync --no-dev
+
+      - name: pip-audit
+        run: uv pip install pip-audit && uv run pip-audit || true
+
+      - name: Generate SBOM
+        run: uv run python -m strixnoapi.security.sbom > sbom.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.json
+          retention-days: 90

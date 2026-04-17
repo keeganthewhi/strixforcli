@@ -1,0 +1,53 @@
+name: e2e
+
+# Gated end-to-end tests that require real CLI authentication. Manual
+# trigger only; secrets must be configured on the runner.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-scan:
+    name: e2e scan (${{ matrix.cli }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cli: [claude, codex, gemini, cursor]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+
+      - name: Start OWASP Juice Shop
+        run: |
+          docker run -d --name juice -p 3000:3000 bkimminich/juice-shop
+          sleep 10
+
+      - name: Run strixnoapi scan
+        env:
+          STRIX_CLI_MODE: ${{ matrix.cli }}
+          STRIX_E2E: "1"
+        run: |
+          uv run strix setup --auto --force
+          uv run strix doctor
+          STRIX_CLI_MODE=${{ matrix.cli }} uv run strix \
+            --target http://host.docker.internal:3000 \
+            --non-interactive \
+            --scan-mode quick
+
+      - name: Verify audit chain
+        run: |
+          RUN_ID=$(ls -t strix_runs | head -1)
+          uv run strix audit verify "$RUN_ID"
+
+      - name: Upload findings
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: findings-${{ matrix.cli }}
+          path: strix_runs/
+          retention-days: 7
