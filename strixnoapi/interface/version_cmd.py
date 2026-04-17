@@ -19,11 +19,22 @@ def _pkg_version(name: str) -> str:
         return "unknown"
 
 
+UPSTREAM_STRIX_BASE_SHA = "15c95718e600897a2a532a613a1c8fa6b712b144"
+UPSTREAM_STRIX_BASE_VERSION = "0.8.3"
+
+
 def main(argv: Sequence[str] | None = None) -> int:  # noqa: ARG001
     from strixnoapi.interface.detector import detect_all
 
     print(f"strixnoapi  {_pkg_version('strixnoapi')}")
-    print(f"strix core  {_pkg_version('strix-agent')} (upstream)")
+    upstream_installed = _pkg_version("strix-agent")
+    if upstream_installed == "unknown":
+        print(
+            f"strix core  vendored from usestrix/strix v{UPSTREAM_STRIX_BASE_VERSION} "
+            f"({UPSTREAM_STRIX_BASE_SHA[:7]})"
+        )
+    else:
+        print(f"strix core  {upstream_installed} (upstream)")
     print(f"python      {platform.python_version()}  ({sys.platform})")
     print()
 
