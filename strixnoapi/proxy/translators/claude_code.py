@@ -220,22 +220,39 @@ class ClaudeCodeTranslator(BaseTranslator):
     def _prepend_to_first_user(
         coerced_msgs: list[dict[str, Any]], system_text: str
     ) -> None:
-        """Mutates coerced_msgs: wraps system_text as <strix_system>...</strix_system>
-        and prepends it to the first user message (creating one if none exist)."""
-        wrapped = f"<strix_system>\n{system_text}\n</strix_system>\n\n"
+        """Inject the caller's system prompt into the first user message
+        as a discrete, cache-friendly block.
+
+        Wraps `system_text` in `<strix_system>...</strix_system>` so
+        Claude can distinguish task instructions from conversation, and
+        promotes the first user message to a block list so we can attach
+        ``cache_control: {"type": "ephemeral"}`` to the (typically large
+        and stable) strix prompt. Anthropic charges full price for the
+        first request that caches a block and ~10% of list price for
+        subsequent requests within the cache TTL, which matters enormously
+        during a scan where the same 150 KB system prompt is re-sent
+        every turn.
+        """
+        wrapped_text = f"<strix_system>\n{system_text}\n</strix_system>"
+        strix_block = {
+            "type": "text",
+            "text": wrapped_text,
+            "cache_control": {"type": "ephemeral"},
+        }
         for m in coerced_msgs:
-            if m.get("role") == "user":
-                content = m.get("content")
-                if isinstance(content, str):
-                    m["content"] = wrapped + content
-                elif isinstance(content, list):
-                    text_items = [b for b in content if isinstance(b, dict) and b.get("type") == "text"]
-                    if text_items:
-                        text_items[0]["text"] = wrapped + text_items[0].get("text", "")
-                    else:
-                        content.insert(0, {"type": "text", "text": wrapped})
-                return
-        coerced_msgs.insert(0, {"role": "user", "content": wrapped})
+            if m.get("role") != "user":
+                continue
+            content = m.get("content")
+            if isinstance(content, str):
+                m["content"] = [strix_block, {"type": "text", "text": content}]
+            elif isinstance(content, list):
+                # Prepend as a distinct block so the cache key stays stable
+                # even as the user's own text changes turn-to-turn.
+                content.insert(0, strix_block)
+            else:
+                m["content"] = [strix_block]
+            return
+        coerced_msgs.insert(0, {"role": "user", "content": [strix_block]})
 
     @staticmethod
     def _coerce_message(m: dict[str, Any]) -> dict[str, Any]:

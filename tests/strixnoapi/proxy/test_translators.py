@@ -84,9 +84,15 @@ async def test_claude_complete_with_system(settings, claude_oauth):
     # caller's system content is wrapped into the user message instead.
     assert sent["system"] == "You are Claude Code, Anthropic's official CLI for Claude."
     first_user = next(m for m in sent["messages"] if m["role"] == "user")
-    assert "<strix_system>" in first_user["content"]
-    assert "be helpful" in first_user["content"]
-    assert "hi" in first_user["content"]
+    # content is now a block list so we can attach cache_control to the strix_system block
+    blocks = first_user["content"]
+    assert isinstance(blocks, list)
+    strix_block = blocks[0]
+    assert strix_block["type"] == "text"
+    assert "<strix_system>" in strix_block["text"]
+    assert "be helpful" in strix_block["text"]
+    assert strix_block["cache_control"] == {"type": "ephemeral"}
+    assert any("hi" in b.get("text", "") for b in blocks[1:])
 
 
 @pytest.mark.asyncio
