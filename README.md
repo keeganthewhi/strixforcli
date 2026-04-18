@@ -1,4 +1,4 @@
-# strix-noapi
+# Strix-noapi
 
 **Same [Strix](https://github.com/usestrix/strix). No API key. Powered by your AI CLI subscription.**
 
