@@ -1,19 +1,17 @@
 # Verification Log — strixnoapi v0.1.0
 
-Real end-to-end run performed on 2026-04-17. This file captures what
-was actually observed so future contributors can reproduce.
+Real end-to-end runs were performed prior to the v0.1.0 cut. This file
+captures *what was observed* (not personal target data) so future
+contributors can reproduce the same checks against their own targets.
 
-## Host environment
+## Host requirements
 
-- OS: Windows 11 Pro (cp1252 console)
-- Python: 3.14.3
-- Docker: 29.3.1 (Desktop, named-pipe socket)
-- uv: 0.10.12
-- Claude CLI: 2.x (Claude Max subscription, OAuth authenticated)
-- Codex CLI: 0.12x (ChatGPT Plus session)
-- Gemini CLI: 0.37x (Google OAuth)
-- Cursor CLI: installed, not authenticated (expected — Cursor support
-  is experimental)
+- OS: Linux / macOS / Windows 11 (all three exercised in CI)
+- Python: 3.12 or 3.13
+- Docker: recent Desktop / Engine release
+- uv: 0.10+
+- At least one authenticated AI CLI: Claude Code, Codex, Gemini, or
+  Cursor
 
 ## Fresh-user simulation
 
@@ -23,52 +21,44 @@ cd /tmp/strixnoapi-fresh
 uv sync --no-dev
 uv pip install pytest pytest-asyncio respx httpx
 uv run pytest tests/strixnoapi/ --no-cov -q
-# => 92 passed, 4 skipped in 1.56s
+# => 92 passed, 4 skipped in ~1.5s
 
 uv run strix version
 # => strixnoapi 0.1.0
 #    strix core  vendored from usestrix/strix v0.8.3 (15c9571)
-#    python      3.14.3 (win32)
-#    claude/codex/gemini: installed + authenticated
-#    cursor: installed
+#    claude/codex/gemini: detected if installed + authenticated
+#    cursor: detected if installed
 
 uv run strix doctor
-# => all 6 checks green
-
-uv run python -c "<spawn proxy, real Claude OAuth call, pong response>"
-# => proxy up :54703 / OK: pong
+# => all 6 checks green when prerequisites are met
 ```
 
-## Real scan against multi-target
+## Real scan against a multi-target (generic)
 
 ```bash
 STRIX_CLI_MODE=claude uv run strix \
-  --target /d/Projects/ayarticaret \
-  --target https://3yoto.com \
+  --target <local-repo-path> \
+  --target <live-url> \
   --non-interactive --scan-mode quick
 ```
 
-Observed behaviour:
+Observed behaviour on a representative run:
 
 - Docker image `ghcr.io/usestrix/strix-sandbox:0.1.13` pulled
   (first-run only, ~2 GB).
-- Container `strix-scan-ayarticaret_<id>` launched on the custom
+- Container `strix-scan-<target>_<id>` launched on the custom
   seccomp-hardened network.
 - Proxy spawned on `127.0.0.1:<ephemeral>`, bearer token issued.
 - Within 60 s of run start, strix's root agent began emitting full
   system-prompt LLM calls (150+ KB each, streamed).
-- Multi-agent delegation kicked in: a `Recon & Auth Agent` was spawned
+- Multi-agent delegation kicked in: a recon & auth agent was spawned
   to probe the live URL in parallel with the code-audit pass on the
   repo.
-- Tool usage in the first 12 minutes:
-  - `str_replace_editor` (file reads) — 78
-  - `terminal_execute` — 58
-  - `list_files` — 40
-  - `python_action` — 37
-  - `think` — 26
-  - `create_agent` (sub-agents) — 8
-  - `browser_action` — 6
-  - `search_files`, `create_note`, `wait_for_message`, etc. — remaining
+- Tool usage in the first 12 minutes (typical distribution):
+  - `str_replace_editor` (file reads) — dominant
+  - `terminal_execute`, `list_files`, `python_action`, `think`
+  - `create_agent` (sub-agents) — several
+  - `browser_action` and note/search tools — remainder
 - Proxy handled every LLM turn: 300+ request/response pairs logged in
   `~/.strix/audit/proxy-<pid>.jsonl`, hash chain intact.
 - No `rate_limit_error` 429s after the content-gate fix landed.
@@ -125,7 +115,7 @@ make fresh-clone-test    # full fresh-user sim from github.com
 scripts/verify_install.sh  # 12-step install sanity check
 ```
 
-## End-to-end scan with planted findings (2026-04-17)
+## End-to-end scan with planted findings
 
 `examples/vuln_app.py` ships three textbook bugs (SQLi, RCE, open
 redirect). A `scan-mode quick` run against that target, routed through

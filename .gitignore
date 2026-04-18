@@ -100,6 +100,7 @@ schema.graphql
 
 # strixnoapi-specific
 .claude-session.md
+.claude/
 .strix-runtime/
 runs/
 *.token
